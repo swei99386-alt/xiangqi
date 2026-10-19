@@ -977,7 +977,9 @@
                         if (movesByOpp > 0 && checksGivenByOpp === movesByOpp) {
                             return 18500 - ply; // Opponent perpetual checking
                         }
-                        return 0; // Peaceful repetition
+                        // Non-checking peaceful repetition: heavily penalize the side who moved to create this cycle!
+                        // In Negamax, returning +2500 - ply evaluates to -2500 + ply for the mover!
+                        return 2500 - ply;
                     }
                 }
             }
@@ -1184,6 +1186,48 @@
                         bestMove = m;
                         bestPV = [{ from, to, piece: p, cap }];
                         break;
+                    }
+                }
+            }
+
+            // Anti-deadlock root check:
+            // Ensure AI bestMove does not repeat any past game state if alternative legal moves exist!
+            if (bestMove && gameHistoryCount >= 2) {
+                const bFrom = decodeFrom(bestMove), bTo = decodeTo(bestMove), bCap = decodeCap(bestMove);
+                const bp = board[bFrom];
+                board[bTo] = bp; board[bFrom] = 0;
+                const bNextHash = computeHash(board, -side);
+                board[bFrom] = bp; board[bTo] = bCap;
+
+                let bestMoveRepeats = false;
+                for (let i = 0; i < gameHistoryCount; i++) {
+                    if (searchHashHistory[i] === bNextHash) {
+                        bestMoveRepeats = true;
+                        break;
+                    }
+                }
+
+                if (bestMoveRepeats) {
+                    const allMoves = generateMoves(board, side, false);
+                    for (let m of allMoves) {
+                        const mf = decodeFrom(m), mt = decodeTo(m), mc = decodeCap(m);
+                        const mp = board[mf];
+                        board[mt] = mp; board[mf] = 0;
+                        const illegal = isKingAttacked(board, side);
+                        const mh = computeHash(board, -side);
+                        board[mf] = mp; board[mt] = mc;
+
+                        if (!illegal) {
+                            let mRepeats = false;
+                            for (let i = 0; i < gameHistoryCount; i++) {
+                                if (searchHashHistory[i] === mh) { mRepeats = true; break; }
+                            }
+                            if (!mRepeats) {
+                                bestMove = m;
+                                bestPV = [{ from: mf, to: mt, piece: mp, cap: mc }];
+                                break;
+                            }
+                        }
                     }
                 }
             }
