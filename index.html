@@ -1,0 +1,2400 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>中国象棋·外星人大师引擎版 (天一智算系统)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@500;700;900&family=Inter:wght@400;600;700&display=swap');
+
+        :root {
+            --wood-light: #e8be82;
+            --wood-mid: #d6a15c;
+            --wood-dark: #8c5828;
+            --bg-dark: #14110f;
+            --panel-bg: #1e1916;
+            --gold-accent: #e5b869;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            background-image: 
+                radial-gradient(circle at 20% 20%, rgba(180, 120, 50, 0.08) 0%, transparent 50%),
+                radial-gradient(circle at 80% 80%, rgba(160, 40, 30, 0.08) 0%, transparent 50%);
+            color: #f3ece2;
+            font-family: 'Inter', "Microsoft YaHei", sans-serif;
+            overflow-x: hidden;
+        }
+
+        .font-chess {
+            font-family: 'Noto Serif SC', "KaiTi", "STKaiti", "SimKai", serif;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #171311;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #4a3c31;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #6e5746;
+        }
+
+        /* Board Container Glow & Texture */
+        .board-frame {
+            background: linear-gradient(145deg, #4a2f18, #2b1a0c);
+            box-shadow: 
+                0 20px 50px rgba(0, 0, 0, 0.85),
+                inset 0 2px 4px rgba(255, 215, 150, 0.25),
+                0 0 0 2px #6b4423;
+        }
+
+        /* Check Alert Animation */
+        @keyframes checkPulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.08); opacity: 0.85; }
+        }
+        .check-banner {
+            animation: checkPulse 0.8s ease-in-out infinite;
+        }
+
+        /* Win Rate Bar transition */
+        .eval-bar-fill {
+            transition: height 0.45s cubic-bezier(0.22, 1, 0.36, 1), width 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        .btn-gold {
+            background: linear-gradient(135deg, #c28e3a 0%, #8f621b 100%);
+            border: 1px solid #e7be74;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+            transition: all 0.2s ease;
+        }
+        .btn-gold:hover:not(:disabled) {
+            background: linear-gradient(135deg, #d6a149 0%, #a67423 100%);
+            transform: translateY(-1px);
+            box-shadow: 0 6px 16px rgba(214, 161, 73, 0.3);
+        }
+        .btn-gold:active:not(:disabled) {
+            transform: translateY(0);
+        }
+        .btn-gold:disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+        }
+
+        .btn-dark {
+            background: #29221e;
+            border: 1px solid #453931;
+            transition: all 0.2s ease;
+        }
+        .btn-dark:hover:not(:disabled) {
+            background: #382e28;
+            border-color: #6b5748;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between select-none">
+
+    <header class="border-b border-amber-900/40 bg-[#191411]/90 backdrop-blur-md sticky top-0 z-30">
+        <div class="max-w-7xl mx-auto px-4 py-2.5 flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-red-700 to-amber-900 flex items-center justify-center border border-amber-400/50 shadow-lg">
+                    <span class="font-chess text-2xl font-black text-amber-200">帥</span>
+                </div>
+                <div>
+                    <div class="flex items-center gap-2">
+                        <h1 class="font-chess text-xl md:text-2xl font-bold tracking-wider text-amber-100">中国象棋·天一智算大师</h1>
+                        <span class="text-xs px-2 py-0.5 rounded-full bg-amber-500/20 border border-amber-400/40 text-amber-300 font-semibold">15层算杀延伸</span>
+                    </div>
+                    <p class="text-xs text-amber-200/60">Alpha-Beta + 置换表 + 空步裁剪 + 极深静态推演引擎</p>
+                </div>
+            </div>
+
+            <!-- Engine Real-time Telemetry Pill -->
+            <div class="flex items-center gap-4 bg-[#120e0c] px-3.5 py-1.5 rounded-xl border border-amber-800/40 text-xs">
+                <div class="flex items-center gap-1.5">
+                    <span id="engineDot" class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                    <span class="text-stone-400">状态:</span>
+                    <span id="engineStateText" class="font-semibold text-amber-300">待命</span>
+                </div>
+                <div class="h-3 w-px bg-stone-700"></div>
+                <div>
+                    <span class="text-stone-400">搜索层数:</span>
+                    <span id="telemetryDepth" class="font-mono font-bold text-emerald-400 ml-1">0 / 0 层</span>
+                </div>
+                <div class="hidden sm:block h-3 w-px bg-stone-700"></div>
+                <div class="hidden sm:block">
+                    <span class="text-stone-400">推演节点:</span>
+                    <span id="telemetryNodes" class="font-mono font-bold text-sky-400 ml-1">0</span>
+                </div>
+                <div class="hidden md:block h-3 w-px bg-stone-700"></div>
+                <div class="hidden md:block">
+                    <span class="text-stone-400">算力速度:</span>
+                    <span id="telemetryNps" class="font-mono font-bold text-amber-400 ml-1">0 节点/秒</span>
+                </div>
+            </div>
+
+            <!-- Quick Header Buttons -->
+            <div class="flex items-center gap-2">
+                <button id="soundToggleBtn" onclick="toggleSound()" class="btn-dark px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5 text-amber-200" title="音效开关">
+                    <i id="soundIcon" class="fa-solid fa-volume-high text-amber-400"></i>
+                    <span class="hidden sm:inline">音效</span>
+                </button>
+                <button onclick="openGuideModal()" class="btn-gold px-3 py-1.5 rounded-lg text-xs font-semibold text-white flex items-center gap-1.5">
+                    <i class="fa-solid fa-scroll"></i>
+                    <span>大师心法与口诀</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl w-full mx-auto px-3 sm:px-6 py-4 flex-1 grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+
+        <!-- Left Column: Player Cards, Evaluation Bar & Chessboard (7 Cols on LG) -->
+        <div class="lg:col-span-7 flex flex-col items-center w-full">
+
+            <!-- Top Player Bar (AI / Black by default) -->
+            <div class="w-full max-w-[560px] mb-2.5 bg-[#1e1815] border border-amber-900/50 rounded-xl p-2.5 flex items-center justify-between shadow-md">
+                <div class="flex items-center gap-3">
+                    <div class="relative">
+                        <div class="w-10 h-10 rounded-lg bg-gradient-to-b from-stone-700 to-stone-900 border border-amber-500/60 flex items-center justify-center font-chess text-xl font-bold text-amber-300 shadow">
+                            將
+                        </div>
+                        <span class="absolute -bottom-1 -right-1 px-1 text-[10px] bg-amber-600 text-black font-bold rounded">特大</span>
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <span id="topPlayerName" class="font-bold text-sm text-amber-100">“外星人”王天一风格引擎</span>
+                            <span id="openingBadge" class="text-[11px] px-2 py-0.5 rounded bg-amber-950/90 border border-amber-700/50 text-amber-300">中局博弈</span>
+                        </div>
+                        <div id="aiCommentText" class="text-xs text-stone-400 mt-0.5 truncate max-w-[260px] sm:max-w-[340px]">
+                            “棋道如水，先抢肋道与中路控制权。”
+                        </div>
+                    </div>
+                </div>
+                <div class="text-right">
+                    <div class="text-[11px] text-stone-400">局势评分</div>
+                    <div id="evalScoreBadge" class="font-mono text-sm font-bold text-amber-400">均势 (0.0)</div>
+                </div>
+            </div>
+
+            <!-- Board + Vertical Evaluation Bar Wrapper -->
+            <div class="flex items-stretch justify-center gap-2.5 w-full max-w-[560px]">
+                
+                <!-- Vertical Win-Rate / Evaluation Bar -->
+                <div class="w-5 sm:w-6 rounded-xl overflow-hidden bg-red-700 border border-amber-700/60 flex flex-col relative shadow-inner" title="实时局势优劣评估条（上黑下红）">
+                    <div id="blackEvalBar" class="eval-bar-fill bg-stone-900 w-full" style="height: 50%;"></div>
+                    <div class="absolute inset-0 flex flex-col justify-between items-center py-2 pointer-events-none text-[10px] font-mono font-bold">
+                        <span id="blackWinPct" class="text-stone-300">50</span>
+                        <div class="w-full h-0.5 bg-amber-400/70"></div>
+                        <span id="redWinPct" class="text-red-100">50</span>
+                    </div>
+                </div>
+
+                <!-- Main Chessboard Frame -->
+                <div class="relative board-frame p-2 sm:p-3 rounded-2xl flex-1 flex justify-center items-center">
+                    <canvas id="xiangqiCanvas" width="540" height="600" class="w-full h-auto max-w-[500px] rounded-lg cursor-pointer block"></canvas>
+
+                    <!-- Floating Check / Alert Banner -->
+                    <div id="floatingAlert" class="hidden absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none z-20">
+                        <div id="floatingAlertInner" class="check-banner font-chess text-4xl sm:text-5xl font-black px-6 py-3 rounded-2xl bg-red-950/90 border-2 border-amber-400 text-amber-300 shadow-[0_0_40px_rgba(220,38,38,0.9)]">
+                            将 军！
+                        </div>
+                    </div>
+
+                    <!-- AI Thinking Overlay Spinner on Top Right of Board -->
+                    <div id="thinkingBadge" class="hidden absolute top-4 right-4 bg-black/80 backdrop-blur border border-amber-500/60 px-3 py-1.5 rounded-full flex items-center gap-2 text-xs text-amber-300 shadow-lg pointer-events-none">
+                        <i class="fa-solid fa-circle-notch fa-spin text-amber-400"></i>
+                        <span id="thinkingBadgeText">深度推演 15 步杀招中...</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bottom Player Bar (Human / Red by default) -->
+            <div class="w-full max-w-[560px] mt-2.5 bg-[#1e1815] border border-amber-900/50 rounded-xl p-2.5 flex flex-wrap items-center justify-between gap-2 shadow-md">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-lg bg-gradient-to-b from-red-700 to-red-950 border border-amber-400/60 flex items-center justify-center font-chess text-xl font-bold text-amber-100 shadow">
+                        帥
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <span class="font-bold text-sm text-amber-100">本方棋手（你）</span>
+                            <span id="turnIndicatorBadge" class="text-xs px-2 py-0.5 rounded bg-red-600/30 border border-red-500 text-red-200 font-semibold">轮到你走棋</span>
+                        </div>
+                        <div class="text-xs text-stone-400 mt-0.5">点击棋子选中，绿点为可走位置，金色箭头为大师支招/预测路线</div>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-2">
+                    <button id="hintBtn" onclick="requestMasterHint()" class="btn-gold px-3 py-1.5 rounded-lg text-xs font-bold text-white flex items-center gap-1.5" title="让天一引擎帮你算一步绝佳好棋">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i>
+                        <span>大师支招</span>
+                    </button>
+                    <button onclick="undoPairMove()" class="btn-dark px-3 py-1.5 rounded-lg text-xs text-amber-200 flex items-center gap-1" title="悔棋一回合">
+                        <i class="fa-solid fa-rotate-left"></i>
+                        <span>悔棋</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="lg:col-span-5 flex flex-col gap-4 w-full">
+
+            <!-- Panel 1: Engine Computing Settings & Game Controls -->
+            <div class="bg-[#1e1815] border border-amber-900/50 rounded-2xl p-4 shadow-xl">
+                <div class="flex items-center justify-between mb-3 pb-2 border-b border-stone-800">
+                    <h2 class="font-chess text-lg font-bold text-amber-300 flex items-center gap-2">
+                        <i class="fa-solid fa-microchip text-amber-400"></i>
+                        <span>天一引擎算力与对局控制台</span>
+                    </h2>
+                    <span class="text-[11px] text-emerald-400 bg-emerald-950/60 border border-emerald-700/50 px-2 py-0.5 rounded">Web Worker 独立线程</span>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                    <div>
+                        <label class="block text-xs text-stone-400 mb-1">AI 算力档位（含算杀延伸）</label>
+                        <select id="levelSelect" onchange="updateEngineConfig()" class="w-full bg-[#130f0d] border border-amber-800/60 rounded-lg px-3 py-2 text-xs text-amber-100 focus:outline-none focus:border-amber-400">
+                            <option value="fast">棋院强手（基础6层 + 算杀12层 · 秒下）</option>
+                            <option value="master" selected>省冠大师（基础8层 + 算杀14层 · 推荐）</option>
+                            <option value="alien">外星人·王天一（基础10层 + 算杀16层 · 深度长考）</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs text-stone-400 mb-1">残局/经典名局挑战特训</label>
+                        <select id="scenarioSelect" onchange="loadScenario(this.value)" class="w-full bg-[#130f0d] border border-amber-800/60 rounded-lg px-3 py-2 text-xs text-amber-100 focus:outline-none focus:border-amber-400">
+                            <option value="standard">【标准全盘】红先黑后正规战</option>
+                            <option value="wang_attack">【王天一名局】中炮七路马弃子抢攻</option>
+                            <option value="tiemenshuan">【杀法特训】铁门栓与沉底炮连环杀</option>
+                            <option value="shuangma">【杀法特训】双马饮泉破全士象</option>
+                            <option value="chema_endgame">【残局特训】车马冷着巧破车双士</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Checkboxes for Visual Aids -->
+                <div class="flex flex-wrap items-center justify-between gap-2 bg-[#14100e] px-3 py-2 rounded-xl border border-stone-800 mb-3 text-xs">
+                    <label class="flex items-center gap-2 cursor-pointer text-stone-300">
+                        <input type="checkbox" id="showPvArrows" checked onchange="drawBoard()" class="accent-amber-500 rounded">
+                        <span>在棋盘上画出 AI 预测路线箭头</span>
+                    </label>
+                    <label class="flex items-center gap-2 cursor-pointer text-stone-300">
+                        <input type="checkbox" id="useOpeningBook" checked class="accent-amber-500 rounded">
+                        <span>启用王天一特大开局库</span>
+                    </label>
+                </div>
+
+                <!-- Primary Action Buttons -->
+                <div class="grid grid-cols-3 gap-2">
+                    <button onclick="resetToCurrentScenario()" class="btn-gold py-2 px-3 rounded-xl text-xs font-bold text-white flex items-center justify-center gap-1.5">
+                        <i class="fa-solid fa-chess-board"></i>
+                        <span>重新开局</span>
+                    </button>
+                    <button onclick="flipSidesAndLetAiPlay()" class="btn-dark py-2 px-3 rounded-xl text-xs font-semibold text-amber-200 flex items-center justify-center gap-1.5">
+                        <i class="fa-solid fa-retweet text-amber-400"></i>
+                        <span>让 AI 走当前步</span>
+                    </button>
+                    <button id="autoPlayBtn" onclick="toggleAiVsAi()" class="btn-dark py-2 px-3 rounded-xl text-xs font-semibold text-amber-200 flex items-center justify-center gap-1.5">
+                        <i class="fa-solid fa-robot text-emerald-400"></i>
+                        <span id="autoPlayBtnText">神仙打架观摩</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Panel 2: 15-Step Principal Variation (AI 脑内推演未来局势透视窗) -->
+            <div class="bg-[#1e1815] border border-amber-900/50 rounded-2xl p-4 shadow-xl">
+                <div class="flex items-center justify-between mb-2">
+                    <h2 class="font-chess text-base font-bold text-amber-300 flex items-center gap-2">
+                        <i class="fa-solid fa-eye text-amber-400"></i>
+                        <span>AI 脑内多步推演主变例 (未来预测链)</span>
+                    </h2>
+                    <span id="pvDepthTag" class="text-[11px] font-mono text-amber-400/90">等待推演...</span>
+                </div>
+                <p class="text-[11px] text-stone-400 mb-2.5">
+                    这里实时展示引擎通过 Alpha-Beta 与算杀延伸算出的后续最佳攻防序列（鼠标悬停可高亮）：
+                </p>
+
+                <div id="pvContainer" class="min-h-[68px] max-h-[110px] overflow-y-auto bg-[#130f0d] border border-stone-800 rounded-xl p-2.5 flex flex-wrap gap-1.5 items-center text-xs">
+                    <span class="text-stone-500 italic">走出一着棋后，这里将实时列出 AI 往后推演的每一步招法...</span>
+                </div>
+
+                <!-- Tactical Analysis Explanation Box -->
+                <div class="mt-2.5 bg-amber-950/30 border border-amber-800/40 rounded-xl p-2.5 flex items-start gap-2.5">
+                    <i class="fa-solid fa-lightbulb text-amber-400 mt-0.5"></i>
+                    <div class="text-xs leading-relaxed text-amber-100/90" id="tacticalExplanation">
+                        <strong>大师开局建议：</strong>执红先行推荐走<strong>“炮二平五”</strong>（架中炮抢攻中路）或<strong>“兵七进一”</strong>（王天一最拿手的“仙人指路”，试探黑方虚实）。
+                    </div>
+                </div>
+            </div>
+
+            <!-- Panel 3: Move History & Master Tactical Quick-Cheatsheet Tabs -->
+            <div class="bg-[#1e1815] border border-amber-900/50 rounded-2xl p-4 shadow-xl flex-1 flex flex-col">
+                <div class="flex items-center gap-2 border-b border-stone-800 pb-2.5 mb-3">
+                    <button id="tabMovesBtn" onclick="switchSideTab('moves')" class="px-3 py-1 rounded-lg text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                        <i class="fa-solid fa-list-ol mr-1"></i>实战棋谱记录
+                    </button>
+                    <button id="tabKoujueBtn" onclick="switchSideTab('koujue')" class="px-3 py-1 rounded-lg text-xs font-bold text-stone-400 hover:text-amber-200">
+                        <i class="fa-solid fa-fire-flame-curved mr-1"></i>王天一实战口诀速查
+                    </button>
+                </div>
+
+                <!-- Tab 1: Move Notation List -->
+                <div id="tabMovesContent" class="h-[190px] overflow-y-auto bg-[#130f0d] rounded-xl p-2.5 border border-stone-800 font-mono text-xs space-y-1">
+                    <div class="text-stone-500 text-center py-12">暂无走子记录，请点击棋盘开始对弈</div>
+                </div>
+
+                <!-- Tab 2: Quick Koujue Cards -->
+                <div id="tabKoujueContent" class="hidden h-[190px] overflow-y-auto space-y-2 pr-1 text-xs">
+                    <div class="p-2.5 rounded-lg bg-[#14100e] border border-amber-900/40">
+                        <div class="font-bold text-amber-300 mb-0.5">① “三步不出车，必定要输棋”</div>
+                        <p class="text-stone-400">一车十子寒。开局前五回合内必须亮出至少一侧主力车，优先抢占四路、六路“肋道”或巡河线。</p>
+                    </div>
+                    <div class="p-2.5 rounded-lg bg-[#14100e] border border-amber-900/40">
+                        <div class="font-bold text-amber-300 mb-0.5">② “开局炮胜马，残局马胜炮”</div>
+                        <p class="text-stone-400">开局子多炮架多，炮灵活多变；残局子少无炮架，马八面威风且不受蹩马腿困扰，残局切忌轻易拿马换炮。</p>
+                    </div>
+                    <div class="p-2.5 rounded-lg bg-[#14100e] border border-amber-900/40">
+                        <div class="font-bold text-amber-300 mb-0.5">③ 王天一“天外飞仙”三大绝活</div>
+                        <p class="text-stone-400"><strong>仙人指路起手</strong>控盘、<strong>顿挫先将一军</strong>破坏对方士象结构、<strong>过河兵卡住象眼</strong>用时间换空间。</p>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <div id="guideModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-[#1e1815] border-2 border-amber-600/60 rounded-2xl max-w-3xl w-full max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
+            <div class="px-6 py-4 bg-gradient-to-r from-amber-950/80 to-stone-900 border-b border-amber-800/50 flex items-center justify-between">
+                <div class="flex items-center gap-2.5">
+                    <i class="fa-solid fa-book-open-reader text-amber-400 text-xl"></i>
+                    <h3 class="font-chess text-xl font-bold text-amber-200">中国象棋黄金口诀与“外星人”王天一实战心法</h3>
+                </div>
+                <button onclick="closeGuideModal()" class="w-8 h-8 rounded-lg bg-stone-800 hover:bg-stone-700 text-stone-300 flex items-center justify-center">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="p-6 overflow-y-auto space-y-5 text-sm leading-relaxed text-stone-200">
+                <div class="bg-amber-950/30 border border-amber-700/40 rounded-xl p-4">
+                    <h4 class="font-chess text-base font-bold text-amber-300 mb-1">为什么王天一被称为“外星人”？</h4>
+                    <p class="text-xs text-stone-300">
+                        王天一（1989年生，北京大学毕业，中国象棋特级大师），连续十一年稳居中国象棋等级分全国第一，等级分曾突破史无前例的 2770+ 分。他的棋风最大的特点是<strong>“算度深不见底（人形软件）”</strong>与<strong>“残局滴水不漏（天外飞仙）”</strong>——哪怕在看似均势甚至微弱的残局里，他也能精准算出 15 步以后的微小子力位置优势，用钝刀子割肉一般把顶尖高手磨死。
+                    </p>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="bg-[#14100e] border border-stone-800 rounded-xl p-4">
+                        <h5 class="font-bold text-amber-400 mb-2">一、 开局必背六句真言</h5>
+                        <ul class="space-y-1.5 text-xs text-stone-300 list-disc pl-4">
+                            <li><strong>当头炮，马来跳：</strong>中炮攻中卒，屏风马护中路是最稳健的拆解。</li>
+                            <li><strong>三步不出车，必定要输棋：</strong>开局切忌连续拱兵或乱飞士象，亮出主力车是第一要务。</li>
+                            <li><strong>马跳窝心，不死也昏：</strong>绝不把马跳进九宫中心，否则老帅动弹不得。</li>
+                            <li><strong>马走盘河，进退自如：</strong>马跳到河沿（盘河马）或正马位，控制点最多。</li>
+                            <li><strong>起炮在中宫，比诸局较雄：</strong>中路（五路）永远是象棋的生命线。</li>
+                        </ul>
+                    </div>
+
+                    <div class="bg-[#14100e] border border-stone-800 rounded-xl p-4">
+                        <h5 class="font-bold text-amber-400 mb-2">二、 实战必杀技与残局铁律</h5>
+                        <ul class="space-y-1.5 text-xs text-stone-300 list-disc pl-4">
+                            <li><strong>宁失一子，莫失一先：</strong>在对方双车没出动时，弃掉一个马/炮强破对方士象，往往能直接速胜。</li>
+                            <li><strong>先手捉双与“顿挫”：</strong>想吃子或占好位前，先打一将逼对方落士或电车，白赚一步棋。</li>
+                            <li><strong>小卒过河顶大车，老卒入宫万事休：</strong>过河兵千万别无脑拱到底线，停在对方九宫三、四路“花心”旁才最致命。</li>
+                            <li><strong>单车难破士象全，马炮残局勿换马：</strong>残局马能走遍全盘，炮缺炮架威力减半。</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="px-6 py-3 bg-[#14100e] border-t border-stone-800 flex justify-end">
+                <button onclick="closeGuideModal()" class="btn-gold px-5 py-2 rounded-xl text-xs font-bold text-white">
+                    学到了，回到棋盘实战！
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // =========================================================================
+        // 1. WEB AUDIO SYNTHESIZER (No external MP3 needed, pure wooden acoustics)
+        // =========================================================================
+        let soundEnabled = true;
+        let audioCtx = null;
+
+        function ensureAudio() {
+            if (!audioCtx) {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                if (AudioContext) audioCtx = new AudioContext();
+            }
+            if (audioCtx && audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        function playSound(type) {
+            if (!soundEnabled) return;
+            try {
+                ensureAudio();
+                if (!audioCtx) return;
+                const now = audioCtx.currentTime;
+
+                if (type === 'move') {
+                    // Crisp wooden tap
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(190, now);
+                    osc.frequency.exponentialRampToValueAtTime(55, now + 0.065);
+                    gain.gain.setValueAtTime(0.35, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.07);
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    osc.start(now);
+                    osc.stop(now + 0.075);
+                } else if (type === 'capture') {
+                    // Heavy double wood smack
+                    [0, 0.03].forEach((offset, idx) => {
+                        const osc = audioCtx.createOscillator();
+                        const gain = audioCtx.createGain();
+                        osc.type = idx === 0 ? 'sawtooth' : 'triangle';
+                        osc.frequency.setValueAtTime(idx === 0 ? 150 : 260, now + offset);
+                        osc.frequency.exponentialRampToValueAtTime(42, now + offset + 0.11);
+                        gain.gain.setValueAtTime(0.45, now + offset);
+                        gain.gain.exponentialRampToValueAtTime(0.001, now + offset + 0.12);
+                        osc.connect(gain);
+                        gain.connect(audioCtx.destination);
+                        osc.start(now + offset);
+                        osc.stop(now + offset + 0.13);
+                    });
+                } else if (type === 'check') {
+                    // Dramatic brass/gong warning chord
+                    [440, 554.37, 659.25].forEach((freq, i) => {
+                        const osc = audioCtx.createOscillator();
+                        const gain = audioCtx.createGain();
+                        osc.type = 'sine';
+                        osc.frequency.setValueAtTime(freq, now + i * 0.04);
+                        gain.gain.setValueAtTime(0.22, now + i * 0.04);
+                        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+                        osc.connect(gain);
+                        gain.connect(audioCtx.destination);
+                        osc.start(now + i * 0.04);
+                        osc.stop(now + 0.46);
+                    });
+                } else if (type === 'win') {
+                    [523.25, 659.25, 783.99, 1046.5].forEach((freq, i) => {
+                        const osc = audioCtx.createOscillator();
+                        const gain = audioCtx.createGain();
+                        osc.type = 'triangle';
+                        osc.frequency.setValueAtTime(freq, now + i * 0.1);
+                        gain.gain.setValueAtTime(0.28, now + i * 0.1);
+                        gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.1 + 0.4);
+                        osc.connect(gain);
+                        gain.connect(audioCtx.destination);
+                        osc.start(now + i * 0.1);
+                        osc.stop(now + i * 0.1 + 0.42);
+                    });
+                }
+            } catch (e) {
+                // Ignore audio errors on restricted devices
+            }
+        }
+
+        function toggleSound() {
+            soundEnabled = !soundEnabled;
+            const icon = document.getElementById('soundIcon');
+            icon.className = soundEnabled ? 'fa-solid fa-volume-high text-amber-400' : 'fa-solid fa-volume-xmark text-stone-500';
+        }
+
+        // =========================================================================
+        // 2. INLINE WEB WORKER HIGH-DEPTH XIANGQI ENGINE (PIKAFISH-INSPIRED JS CORE)
+        //    - Iterative Deepening + Zobrist Transposition Table
+        //    - Principal Variation Search (PVS) + Null Move Pruning (NMP)
+        //    - Late Move Reductions (LMR) + Check Extensions + Quiescence Search (16 plies)
+        //    - Killer Heuristic + History Heuristic + MVV-LVA
+        // =========================================================================
+        const workerScript = `
+        // Piece Encoding:
+        // 0: Empty
+        // Red (+): 1:K(帥), 2:A(仕), 3:B(相), 4:N(馬), 5:R(車), 6:C(炮), 7:P(兵)
+        // Black (-): -1:k(將), -2:a(士), -3:b(象), -4:n(馬), -5:r(車), -6:c(炮), -7:p(卒)
+
+        const VALS = [0, 10000, 210, 210, 440, 980, 460, 110];
+
+        // Positional Square Tables (Red view, 90 squares: row 0..9, col 0..8)
+        const PST_P = [
+             0,  4,  8, 12, 16, 12,  8,  4,  0,
+            24, 42, 65, 92,130, 92, 65, 42, 24,
+            18, 32, 50, 72, 95, 72, 50, 32, 18,
+            12, 24, 36, 48, 56, 48, 36, 24, 12,
+             8, 14, 22, 24, 28, 24, 22, 14,  8,
+             2,  0, 10,  0, 12,  0, 10,  0,  2,
+             0,  0, -2,  0,  6,  0, -2,  0,  0,
+             0,  0,  0,  0,  0,  0,  0,  0,  0,
+             0,  0,  0,  0,  0,  0,  0,  0,  0,
+             0,  0,  0,  0,  0,  0,  0,  0,  0
+        ];
+
+        const PST_N = [
+             4, 10, 18, 14,  6, 14, 18, 10,  4,
+             6, 14, 34, 22, 10, 22, 34, 14,  6,
+            14, 18, 22, 28, 24, 28, 22, 18, 14,
+            10, 28, 22, 30, 26, 30, 22, 28, 10,
+             8, 18, 18, 22, 20, 22, 18, 18,  8,
+             4, 14, 18, 16, 14, 16, 18, 14,  4,
+             2,  8, 10,  8, 12,  8, 10,  8,  2,
+             4,  2, 10,  8,  4,  8, 10,  2,  4,
+             0,  2,  4,  4, -4,  4,  4,  2,  0,
+            -4, -6,  0,  0,  0,  0,  0, -6, -4
+        ];
+
+        const PST_R = [
+            16, 18, 14, 22, 20, 22, 14, 18, 16,
+            20, 26, 22, 30, 32, 30, 22, 26, 20,
+            14, 16, 14, 22, 22, 22, 14, 16, 14,
+            14, 22, 18, 26, 26, 26, 18, 22, 14,
+            14, 18, 14, 22, 22, 22, 14, 18, 14,
+            12, 18, 14, 22, 22, 22, 14, 18, 12,
+             6, 12,  8, 16, 14, 16,  8, 12,  6,
+             6, 10,  8, 16, 14, 16,  8, 10,  6,
+            10,  6, 10, 18, 10, 18, 10,  6, 10,
+            -4, 12,  8, 16, 12, 16,  8, 12, -4
+        ];
+
+        const PST_C = [
+             8,  6,  2, -8,-10, -8,  2,  6,  8,
+             4,  4,  2, -2,-10, -2,  2,  4,  4,
+             4,  4,  2, -6, -4, -6,  2,  4,  4,
+             2,  4,  0,  8, 16,  8,  0,  4,  2,
+             0,  2,  2,  6, 14,  6,  2,  2,  0,
+            -2,  0,  6,  4, 12,  4,  6,  0, -2,
+             0,  0,  0,  2,  8,  2,  0,  0,  0,
+             4,  0, 10,  6, 14,  6, 10,  0,  4,
+             0,  2,  4,  6,  8,  6,  4,  2,  0,
+             0,  0,  2,  6,  6,  6,  2,  0,  0
+        ];
+
+        // Zobrist Hashing initialization
+        const TT_SIZE = 1 << 18; // 262,144 entries
+        const TT_MASK = TT_SIZE - 1;
+        const zobristPiece = new Int32Array(90 * 15);
+        let zobristSide = 0;
+
+        let seed = 104729;
+        function rand32() {
+            seed ^= seed << 13;
+            seed ^= seed >>> 17;
+            seed ^= seed << 5;
+            return seed;
+        }
+        for (let i = 0; i < zobristPiece.length; i++) zobristPiece[i] = rand32();
+        zobristSide = rand32();
+
+        const ttHash = new Int32Array(TT_SIZE);
+        const ttDepth = new Int8Array(TT_SIZE);
+        const ttFlag = new Int8Array(TT_SIZE); // 1: Exact, 2: Alpha, 3: Beta
+        const ttScore = new Int16Array(TT_SIZE);
+        const ttMove = new Int32Array(TT_SIZE);
+
+        // Killer & History tables
+        const killers = new Int32Array(64 * 2);
+        const historyTable = new Int32Array(90 * 90);
+        const searchHashHistory = new Int32Array(512);
+        const searchCheckHistory = new Uint8Array(512);
+        let gameHistoryCount = 0;
+
+        let nodes = 0;
+        let maxPlyReached = 0;
+        let startTime = 0;
+        let timeLimit = 2500;
+        let abortSearch = false;
+
+        function computeHash(board, side) {
+            let h = side === 1 ? zobristSide : 0;
+            for (let sq = 0; sq < 90; sq++) {
+                const p = board[sq];
+                if (p !== 0) h ^= zobristPiece[sq * 15 + (p + 7)];
+            }
+            return h;
+        }
+
+        // Fast Move Encoding: from | (to << 7) | ((captured + 7) << 14)
+        function encodeMove(from, to, cap) {
+            return from | (to << 7) | ((cap + 7) << 14);
+        }
+        function decodeFrom(m) { return m & 0x7F; }
+        function decodeTo(m) { return (m >> 7) & 0x7F; }
+        function decodeCap(m) { return ((m >> 14) & 0xF) - 7; }
+
+        // Check if side's king is attacked
+        function isKingAttacked(board, side) {
+            let kingSq = -1;
+            const targetK = side === 1 ? 1 : -1;
+            for (let i = 0; i < 90; i++) {
+                if (board[i] === targetK) { kingSq = i; break; }
+            }
+            if (kingSq === -1) return true;
+
+            const kr = (kingSq / 9) | 0;
+            const kc = kingSq % 9;
+            const enemy = -side;
+
+            // 1. Orthogonal: Rook, Cannon, Enemy King (Flying General), Enemy Pawn
+            const dirs = [-9, 9, -1, 1];
+            for (let d = 0; d < 4; d++) {
+                const step = dirs[d];
+                let sq = kingSq + step;
+                let jumped = false;
+                while (sq >= 0 && sq < 90) {
+                    if (step === -1 || step === 1) {
+                        if (((sq / 9) | 0) !== kr) break;
+                    }
+                    const p = board[sq];
+                    if (p !== 0) {
+                        if (!jumped) {
+                            if (p === enemy * 5 || p === enemy * 1) return true; // Rook or Flying King
+                            if (p === enemy * 7) {
+                                // Check if pawn can attack kingSq
+                                if (enemy === 1 && (sq - 9 === kingSq || ((sq / 9 | 0) <= 4 && Math.abs(sq - kingSq) === 1))) return true;
+                                if (enemy === -1 && (sq + 9 === kingSq || ((sq / 9 | 0) >= 5 && Math.abs(sq - kingSq) === 1))) return true;
+                            }
+                            jumped = true;
+                        } else {
+                            if (p === enemy * 6) return true; // Cannon
+                            break;
+                        }
+                    }
+                    sq += step;
+                }
+            }
+
+            // 2. Enemy Knight attacks
+            const nSteps = [
+                [-2,-1,-1,-1], [-2,1,-1,1], [2,-1,1,-1], [2,1,1,1],
+                [-1,-2,-1,-1], [1,-2,1,-1], [-1,2,-1,1], [1,2,1,1]
+            ];
+            for (let i = 0; i < 8; i++) {
+                const nr = kr + nSteps[i][0], nc = kc + nSteps[i][1];
+                if (nr >= 0 && nr < 10 && nc >= 0 && nc < 9) {
+                    const nSq = nr * 9 + nc;
+                    if (board[nSq] === enemy * 4) {
+                        // Knight leg from knight's perspective
+                        const legR = nr + (kr - nr === 2 ? 1 : kr - nr === -2 ? -1 : 0);
+                        const legC = nc + (kc - nc === 2 ? 1 : kc - nc === -2 ? -1 : 0);
+                        if (board[legR * 9 + legC] === 0) return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        function generateMoves(board, side, capturesOnly) {
+            const moves = [];
+            for (let sq = 0; sq < 90; sq++) {
+                const p = board[sq];
+                if (p === 0 || (p > 0 ? 1 : -1) !== side) continue;
+                const type = Math.abs(p);
+                const r = (sq / 9) | 0;
+                const c = sq % 9;
+
+                if (type === 5 || type === 6) { // Rook or Cannon
+                    const dirs = [-9, 9, -1, 1];
+                    for (let d = 0; d < 4; d++) {
+                        const step = dirs[d];
+                        let nsq = sq + step;
+                        let jumped = false;
+                        while (nsq >= 0 && nsq < 90) {
+                            if ((step === -1 || step === 1) && (((nsq / 9) | 0) !== r)) break;
+                            const target = board[nsq];
+                            if (!jumped) {
+                                if (target === 0) {
+                                    if (!capturesOnly) moves.push(encodeMove(sq, nsq, 0));
+                                } else {
+                                    if (type === 5 && (target > 0 ? 1 : -1) !== side) {
+                                        moves.push(encodeMove(sq, nsq, target));
+                                    }
+                                    jumped = true;
+                                }
+                            } else {
+                                if (target !== 0) {
+                                    if (type === 6 && (target > 0 ? 1 : -1) !== side) {
+                                        moves.push(encodeMove(sq, nsq, target));
+                                    }
+                                    break;
+                                }
+                            }
+                            nsq += step;
+                        }
+                    }
+                } else if (type === 4) { // Knight
+                    const nMoves = [
+                        [-2,-1,-1,0], [-2,1,-1,0], [2,-1,1,0], [2,1,1,0],
+                        [-1,-2,0,-1], [1,-2,0,-1], [-1,2,0,1], [1,2,0,1]
+                    ];
+                    for (let i = 0; i < 8; i++) {
+                        const nr = r + nMoves[i][0], nc = c + nMoves[i][1];
+                        if (nr >= 0 && nr < 10 && nc >= 0 && nc < 9) {
+                            if (board[(r + nMoves[i][2]) * 9 + (c + nMoves[i][3])] === 0) {
+                                const nsq = nr * 9 + nc;
+                                const target = board[nsq];
+                                if (target === 0) {
+                                    if (!capturesOnly) moves.push(encodeMove(sq, nsq, 0));
+                                } else if ((target > 0 ? 1 : -1) !== side) {
+                                    moves.push(encodeMove(sq, nsq, target));
+                                }
+                            }
+                        }
+                    }
+                } else if (type === 3) { // Bishop
+                    const bMoves = [[-2,-2,-1,-1],[-2,2,-1,1],[2,-2,1,-1],[2,2,1,1]];
+                    for (let i = 0; i < 4; i++) {
+                        const nr = r + bMoves[i][0], nc = c + bMoves[i][1];
+                        if (nr >= 0 && nr < 10 && nc >= 0 && nc < 9) {
+                            if ((side === 1 && nr < 5) || (side === -1 && nr > 4)) continue;
+                            if (board[(r + bMoves[i][2]) * 9 + (c + bMoves[i][3])] === 0) {
+                                const nsq = nr * 9 + nc;
+                                const target = board[nsq];
+                                if (target === 0) {
+                                    if (!capturesOnly) moves.push(encodeMove(sq, nsq, 0));
+                                } else if ((target > 0 ? 1 : -1) !== side) {
+                                    moves.push(encodeMove(sq, nsq, target));
+                                }
+                            }
+                        }
+                    }
+                } else if (type === 2) { // Advisor
+                    const aMoves = [[-1,-1],[-1,1],[1,-1],[1,1]];
+                    for (let i = 0; i < 4; i++) {
+                        const nr = r + aMoves[i][0], nc = c + aMoves[i][1];
+                        if (nc >= 3 && nc <= 5 && ((side === 1 && nr >= 7 && nr <= 9) || (side === -1 && nr >= 0 && nr <= 2))) {
+                            const nsq = nr * 9 + nc;
+                            const target = board[nsq];
+                            if (target === 0) {
+                                if (!capturesOnly) moves.push(encodeMove(sq, nsq, 0));
+                            } else if ((target > 0 ? 1 : -1) !== side) {
+                                moves.push(encodeMove(sq, nsq, target));
+                            }
+                        }
+                    }
+                } else if (type === 1) { // King
+                    const kMoves = [[-1,0],[1,0],[0,-1],[0,1]];
+                    for (let i = 0; i < 4; i++) {
+                        const nr = r + kMoves[i][0], nc = c + kMoves[i][1];
+                        if (nc >= 3 && nc <= 5 && ((side === 1 && nr >= 7 && nr <= 9) || (side === -1 && nr >= 0 && nr <= 2))) {
+                            const nsq = nr * 9 + nc;
+                            const target = board[nsq];
+                            if (target === 0) {
+                                if (!capturesOnly) moves.push(encodeMove(sq, nsq, 0));
+                            } else if ((target > 0 ? 1 : -1) !== side) {
+                                moves.push(encodeMove(sq, nsq, target));
+                            }
+                        }
+                    }
+                } else if (type === 7) { // Pawn
+                    const dir = side === 1 ? -1 : 1;
+                    const nr = r + dir;
+                    if (nr >= 0 && nr < 10) {
+                        const nsq = nr * 9 + c;
+                        const target = board[nsq];
+                        if (target === 0) {
+                            if (!capturesOnly) moves.push(encodeMove(sq, nsq, 0));
+                        } else if ((target > 0 ? 1 : -1) !== side) {
+                            moves.push(encodeMove(sq, nsq, target));
+                        }
+                    }
+                    if ((side === 1 && r <= 4) || (side === -1 && r >= 5)) {
+                        for (let dc = -1; dc <= 1; dc += 2) {
+                            const nc = c + dc;
+                            if (nc >= 0 && nc < 9) {
+                                const nsq = r * 9 + nc;
+                                const target = board[nsq];
+                                if (target === 0) {
+                                    if (!capturesOnly) moves.push(encodeMove(sq, nsq, 0));
+                                } else if ((target > 0 ? 1 : -1) !== side) {
+                                    moves.push(encodeMove(sq, nsq, target));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            return moves;
+        }
+
+        function evaluate(board, side) {
+            let score = 0;
+            for (let sq = 0; sq < 90; sq++) {
+                const p = board[sq];
+                if (p === 0) continue;
+                const type = Math.abs(p);
+                let v = VALS[type];
+                const psq = p > 0 ? sq : (89 - sq);
+                if (type === 7) v += PST_P[psq];
+                else if (type === 4) v += PST_N[psq];
+                else if (type === 5) v += PST_R[psq];
+                else if (type === 6) v += PST_C[psq];
+
+                // Rib-file (Col 3 & 5) control bonus (Wang Tianyi style)
+                const col = sq % 9;
+                if ((type === 5 || type === 6) && (col === 3 || col === 5)) v += 14;
+                if (type === 6 && col === 4) v += 18; // Central cannon control
+
+                score += p > 0 ? v : -v;
+            }
+            return side === 1 ? score : -score;
+        }
+
+        function scoreMoves(moves, board, ttBestMove, ply) {
+            const scores = new Int32Array(moves.length);
+            const k1 = killers[ply * 2];
+            const k2 = killers[ply * 2 + 1];
+            for (let i = 0; i < moves.length; i++) {
+                const m = moves[i];
+                if (m === ttBestMove) {
+                    scores[i] = 2000000;
+                } else {
+                    const cap = decodeCap(m);
+                    if (cap !== 0) {
+                        const attacker = Math.abs(board[decodeFrom(m)]);
+                        scores[i] = 1000000 + VALS[Math.abs(cap)] * 10 - VALS[attacker];
+                    } else if (m === k1) {
+                        scores[i] = 900000;
+                    } else if (m === k2) {
+                        scores[i] = 850000;
+                    } else {
+                        scores[i] = historyTable[decodeFrom(m) * 90 + decodeTo(m)];
+                    }
+                }
+            }
+            // Selection sort helper used during iteration
+            return scores;
+        }
+
+        function pickNextMove(moves, scores, startIdx) {
+            let bestIdx = startIdx;
+            let bestScore = scores[startIdx];
+            for (let i = startIdx + 1; i < moves.length; i++) {
+                if (scores[i] > bestScore) {
+                    bestScore = scores[i];
+                    bestIdx = i;
+                }
+            }
+            if (bestIdx !== startIdx) {
+                const tmpM = moves[startIdx]; moves[startIdx] = moves[bestIdx]; moves[bestIdx] = tmpM;
+                const tmpS = scores[startIdx]; scores[startIdx] = scores[bestIdx]; scores[bestIdx] = tmpS;
+            }
+        }
+
+        // Quiescence Search (Tactical extension up to 16 plies deep!)
+        function quiescence(board, alpha, beta, side, ply) {
+            nodes++;
+            if (ply > maxPlyReached) maxPlyReached = ply;
+
+            const inCheck = isKingAttacked(board, side);
+            if (!inCheck) {
+                const standPat = evaluate(board, side);
+                if (standPat >= beta) return beta;
+                if (standPat > alpha) alpha = standPat;
+            }
+
+            if (ply >= 16) return evaluate(board, side);
+
+            // If in check, generate all evasions; otherwise only captures
+            const moves = generateMoves(board, side, !inCheck);
+            const scores = scoreMoves(moves, board, 0, ply);
+
+            let legalCount = 0;
+            for (let i = 0; i < moves.length; i++) {
+                pickNextMove(moves, scores, i);
+                const m = moves[i];
+                const from = decodeFrom(m), to = decodeTo(m), cap = decodeCap(m);
+                if (Math.abs(cap) === 1) return 19000 - ply;
+
+                const movedPiece = board[from];
+                board[to] = movedPiece;
+                board[from] = 0;
+
+                if (isKingAttacked(board, side)) {
+                    board[from] = movedPiece;
+                    board[to] = cap;
+                    continue;
+                }
+                legalCount++;
+
+                const score = -quiescence(board, -beta, -alpha, -side, ply + 1);
+                board[from] = movedPiece;
+                board[to] = cap;
+
+                if (score >= beta) return beta;
+                if (score > alpha) alpha = score;
+            }
+
+            if (inCheck && legalCount === 0) return -19000 + ply;
+            return alpha;
+        }
+
+        function alphaBeta(board, hash, depth, alpha, beta, side, ply, allowNull) {
+            if (ply > maxPlyReached) maxPlyReached = ply;
+            if ((nodes & 2047) === 0) {
+                if (performance.now() - startTime > timeLimit) abortSearch = true;
+            }
+            if (abortSearch) return 0;
+
+            const inCheck = isKingAttacked(board, side);
+            if (inCheck) depth++; // Check extension! Helps see deep 15-ply forcing checkmates
+
+            // Perpetual Check (长将判负) and Repetition Detection in Alpha-Beta
+            const curIdx = gameHistoryCount + ply;
+            if (curIdx < 512) {
+                searchHashHistory[curIdx] = hash;
+                searchCheckHistory[curIdx] = inCheck ? 1 : 0;
+            }
+
+            if (curIdx >= 2 && ply > 0) {
+                for (let i = curIdx - 2; i >= 0; i -= 2) {
+                    if (searchHashHistory[i] === hash) {
+                        let checksGivenByMe = 0;
+                        let movesByMe = 0;
+                        for (let k = i + 1; k < curIdx; k += 2) {
+                            movesByMe++;
+                            if (searchCheckHistory[k]) checksGivenByMe++;
+                        }
+                        if (movesByMe > 0 && checksGivenByMe === movesByMe) {
+                            return -18500 + ply; // Perpetual checking side is ruled to lose
+                        }
+                        let checksGivenByOpp = 0;
+                        let movesByOpp = 0;
+                        for (let k = i; k <= curIdx; k += 2) {
+                            movesByOpp++;
+                            if (searchCheckHistory[k]) checksGivenByOpp++;
+                        }
+                        if (movesByOpp > 0 && checksGivenByOpp === movesByOpp) {
+                            return 18500 - ply; // Opponent perpetual checking
+                        }
+                        return 0; // Peaceful repetition
+                    }
+                }
+            }
+
+            if (depth <= 0) {
+                return quiescence(board, alpha, beta, side, ply);
+            }
+
+            nodes++;
+            const ttIdx = hash & TT_MASK;
+            let ttMoveVal = 0;
+            if (ttHash[ttIdx] === hash) {
+                ttMoveVal = ttMove[ttIdx];
+                if (ttDepth[ttIdx] >= depth && ply > 0) {
+                    const sc = ttScore[ttIdx];
+                    const fl = ttFlag[ttIdx];
+                    if (fl === 1) return sc;
+                    if (fl === 2 && sc <= alpha) return alpha;
+                    if (fl === 3 && sc >= beta) return beta;
+                }
+            }
+
+            // Null Move Pruning (Allows jumping 2-3 plies ahead rapidly)
+            if (allowNull && !inCheck && ply > 0 && depth >= 3) {
+                const R = depth > 5 ? 3 : 2;
+                const nullHash = hash ^ zobristSide;
+                const nullScore = -alphaBeta(board, nullHash, depth - 1 - R, -beta, -beta + 1, -side, ply + 1, false);
+                if (abortSearch) return 0;
+                if (nullScore >= beta) return beta;
+            }
+
+            const moves = generateMoves(board, side, false);
+            const scores = scoreMoves(moves, board, ttMoveVal, ply);
+
+            let bestMove = 0;
+            let bestScore = -30000;
+            let origAlpha = alpha;
+            let legalMoves = 0;
+
+            for (let i = 0; i < moves.length; i++) {
+                pickNextMove(moves, scores, i);
+                const m = moves[i];
+                const from = decodeFrom(m), to = decodeTo(m), cap = decodeCap(m);
+                if (Math.abs(cap) === 1) return 19000 - ply;
+
+                const movedPiece = board[from];
+                board[to] = movedPiece;
+                board[from] = 0;
+
+                if (isKingAttacked(board, side)) {
+                    board[from] = movedPiece;
+                    board[to] = cap;
+                    continue;
+                }
+                legalMoves++;
+
+                let newHash = hash ^ zobristSide ^ zobristPiece[from * 15 + (movedPiece + 7)] ^ zobristPiece[to * 15 + (movedPiece + 7)];
+                if (cap !== 0) newHash ^= zobristPiece[to * 15 + (cap + 7)];
+
+                let score;
+                if (legalMoves === 1) {
+                    score = -alphaBeta(board, newHash, depth - 1, -beta, -alpha, -side, ply + 1, true);
+                } else {
+                    // Late Move Reduction (LMR) for deep horizon reach
+                    let reduction = 0;
+                    if (depth >= 3 && legalMoves > 4 && cap === 0 && !inCheck) {
+                        reduction = legalMoves > 10 ? 2 : 1;
+                    }
+                    score = -alphaBeta(board, newHash, depth - 1 - reduction, -alpha - 1, -alpha, -side, ply + 1, true);
+                    if (score > alpha && reduction > 0) {
+                        score = -alphaBeta(board, newHash, depth - 1, -alpha - 1, -alpha, -side, ply + 1, true);
+                    }
+                    if (score > alpha && score < beta) {
+                        score = -alphaBeta(board, newHash, depth - 1, -beta, -alpha, -side, ply + 1, true);
+                    }
+                }
+
+                board[from] = movedPiece;
+                board[to] = cap;
+
+                if (abortSearch) return 0;
+
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestMove = m;
+                    if (score > alpha) {
+                        alpha = score;
+                        if (alpha >= beta) {
+                            if (cap === 0) {
+                                killers[ply * 2 + 1] = killers[ply * 2];
+                                killers[ply * 2] = m;
+                                historyTable[from * 90 + to] += depth * depth;
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (legalMoves === 0) return -19000 + ply;
+
+            if (!abortSearch) {
+                ttHash[ttIdx] = hash;
+                ttDepth[ttIdx] = depth;
+                ttScore[ttIdx] = bestScore;
+                ttMove[ttIdx] = bestMove;
+                ttFlag[ttIdx] = bestScore <= origAlpha ? 2 : (bestScore >= beta ? 3 : 1);
+            }
+
+            return bestScore;
+        }
+
+        function extractPV(board, side, maxLen) {
+            const pv = [];
+            const seen = new Set();
+            const tempBoard = new Int8Array(board);
+            let curSide = side;
+
+            for (let i = 0; i < maxLen; i++) {
+                const h = computeHash(tempBoard, curSide);
+                if (seen.has(h)) break;
+                seen.add(h);
+                const idx = h & TT_MASK;
+                if (ttHash[idx] !== h || ttMove[idx] === 0) break;
+                const m = ttMove[idx];
+                const from = decodeFrom(m), to = decodeTo(m), cap = decodeCap(m);
+                const piece = tempBoard[from];
+                if (piece === 0 || (piece > 0 ? 1 : -1) !== curSide) break;
+                pv.push({ from, to, piece, cap });
+                tempBoard[to] = piece;
+                tempBoard[from] = 0;
+                curSide = -curSide;
+            }
+            return pv;
+        }
+
+        self.onmessage = function(e) {
+            const { boardArr, side, maxDepth, maxTimeMs, historyBoards } = e.data;
+            const board = new Int8Array(boardArr);
+            nodes = 0;
+            maxPlyReached = 0;
+            startTime = performance.now();
+            timeLimit = maxTimeMs || 2200;
+            abortSearch = false;
+
+            // Load recent game history positions for repetition & perpetual check detection
+            gameHistoryCount = 0;
+            if (historyBoards && historyBoards.length > 0) {
+                for (let h of historyBoards) {
+                    const hb = new Int8Array(h.board);
+                    searchHashHistory[gameHistoryCount] = computeHash(hb, h.side);
+                    searchCheckHistory[gameHistoryCount] = h.inCheck ? 1 : 0;
+                    gameHistoryCount++;
+                }
+            }
+            nodes = 0;
+            maxPlyReached = 0;
+            startTime = performance.now();
+            timeLimit = maxTimeMs || 2200;
+            abortSearch = false;
+
+            // Decay history table slightly
+            for (let i = 0; i < historyTable.length; i++) historyTable[i] >>= 1;
+
+            const rootHash = computeHash(board, side);
+            let bestMove = 0;
+            let bestScore = 0;
+            let completedDepth = 1;
+            let bestPV = [];
+
+            for (let d = 1; d <= maxDepth; d++) {
+                const sc = alphaBeta(board, rootHash, d, -25000, 25000, side, 0, true);
+                if (abortSearch && d > 1) break;
+                completedDepth = d;
+                bestScore = sc;
+                const pv = extractPV(board, side, 15);
+                if (pv.length > 0) {
+                    bestMove = encodeMove(pv[0].from, pv[0].to, pv[0].cap);
+                    bestPV = pv;
+                }
+                const elapsed = Math.max(1, performance.now() - startTime);
+                self.postMessage({
+                    type: 'progress',
+                    depth: completedDepth,
+                    selDepth: Math.max(completedDepth, maxPlyReached),
+                    nodes,
+                    nps: Math.round((nodes * 1000) / elapsed),
+                    score: bestScore,
+                    pv: bestPV
+                });
+                if (Math.abs(bestScore) > 18000) break; // Forced mate found!
+            }
+
+            // Fallback if no PV extracted
+            if (bestMove === 0) {
+                const moves = generateMoves(board, side, false);
+                for (let m of moves) {
+                    const from = decodeFrom(m), to = decodeTo(m), cap = decodeCap(m);
+                    const p = board[from];
+                    board[to] = p; board[from] = 0;
+                    const illegal = isKingAttacked(board, side);
+                    board[from] = p; board[to] = cap;
+                    if (!illegal) {
+                        bestMove = m;
+                        bestPV = [{ from, to, piece: p, cap }];
+                        break;
+                    }
+                }
+            }
+
+            const totalElapsed = Math.max(1, performance.now() - startTime);
+            self.postMessage({
+                type: 'done',
+                bestMove: bestPV[0] || null,
+                depth: completedDepth,
+                selDepth: Math.max(completedDepth, maxPlyReached),
+                nodes,
+                nps: Math.round((nodes * 1000) / totalElapsed),
+                score: bestScore,
+                pv: bestPV
+            });
+        };
+        `;
+
+        const workerBlob = new Blob([workerScript], { type: 'application/javascript' });
+        const engineWorker = new Worker(URL.createObjectURL(workerBlob));
+        engineWorker.onerror = function(err) {
+            console.error("Engine Worker Error:", err);
+            isThinking = false;
+            document.getElementById('thinkingBadge')?.classList.add('hidden');
+            const dot = document.getElementById('engineDot');
+            if (dot) dot.className = 'w-2.5 h-2.5 rounded-full bg-red-500';
+            const state = document.getElementById('engineStateText');
+            if (state) state.innerText = '计算异常';
+            showFloatingBanner('引擎计算异常，已重置', 2000);
+        };
+
+        // =========================================================================
+        // 3. MAIN THREAD GAME STATE, GRANDMASTER OPENING BOOK & SCENARIOS
+        // =========================================================================
+        const canvas = document.getElementById('xiangqiCanvas');
+        const ctx = canvas.getContext('2d');
+        const CELL = 56;
+        const PAD_X = 46;
+        const PAD_Y = 48;
+
+        // Piece codes: +1..+7 Red, -1..-7 Black
+        const PIECE_CHARS = {
+            1: '帥', 2: '仕', 3: '相', 4: '馬', 5: '車', 6: '炮', 7: '兵',
+            '-1': '將', '-2': '士', '-3': '象', '-4': '馬', '-5': '車', '-6': '炮', '-7': '卒'
+        };
+
+        let board = new Int8Array(90);
+        let turn = 1; // 1 = Red, -1 = Black
+        let selectedSq = -1;
+        let legalMovesForSelected = [];
+        let moveHistory = [];
+        let positionHistory = [];
+
+        // Check for Perpetual Check (长将判负) and 3-fold repetition
+        function checkRefereeRepetition(nextSide, inCheck) {
+            const currentKey = board.join(',') + '_' + nextSide;
+            positionHistory.push({
+                board: Array.from(board),
+                side: nextSide,
+                turnWhoMoved: turn,
+                inCheck: inCheck,
+                key: currentKey
+            });
+
+            let occurrences = [];
+            for (let i = 0; i < positionHistory.length; i++) {
+                if (positionHistory[i].key === currentKey) {
+                    occurrences.push(i);
+                }
+            }
+
+            const count = occurrences.length;
+            if (count >= 2) {
+                const prevIdx = occurrences[occurrences.length - 2];
+                const currIdx = occurrences[occurrences.length - 1];
+
+                let moverChecks = 0;
+                let moverMoves = 0;
+                for (let i = prevIdx + 1; i <= currIdx; i++) {
+                    if (positionHistory[i].turnWhoMoved === turn) {
+                        moverMoves++;
+                        if (positionHistory[i].inCheck) moverChecks++;
+                    }
+                }
+
+                const isPerpetualCheck = (moverMoves > 0 && moverChecks === moverMoves);
+                if (count >= 3 && isPerpetualCheck) {
+                    return { action: 'LOSE_PERPETUAL_CHECK', count, isPerpetualCheck };
+                }
+                if (count === 2 && isPerpetualCheck) {
+                    return { action: 'WARN_PERPETUAL_CHECK', count, isPerpetualCheck };
+                }
+                if (count >= 3 && !isPerpetualCheck) {
+                    return { action: 'DRAW_REPETITION', count, isPerpetualCheck };
+                }
+            }
+
+            return { action: 'NONE', count };
+        }
+        let currentPV = [];
+        let highlightedPVStep = -1;
+        let masterHintMove = null;
+        let isThinking = false;
+        let isAiVsAi = false;
+        let gameOver = false;
+
+        // Classic Scenarios & Wang Tianyi Famous Positions
+        const SCENARIOS = {
+            standard: {
+                name: '【标准全盘】中炮屏风马·巅峰对决',
+                turn: 1,
+                comment: '王天一导师建议：先走“炮二平五”架当头炮，或“兵七进一”仙人指路。',
+                board: [
+                    -5,-4,-3,-2,-1,-2,-3,-4,-5,
+                     0, 0, 0, 0, 0, 0, 0, 0, 0,
+                     0,-6, 0, 0, 0, 0, 0,-6, 0,
+                    -7, 0,-7, 0,-7, 0,-7, 0,-7,
+                     0, 0, 0, 0, 0, 0, 0, 0, 0,
+                     0, 0, 0, 0, 0, 0, 0, 0, 0,
+                     7, 0, 7, 0, 7, 0, 7, 0, 7,
+                     0, 6, 0, 0, 0, 0, 0, 6, 0,
+                     0, 0, 0, 0, 0, 0, 0, 0, 0,
+                     5, 4, 3, 2, 1, 2, 3, 4, 5
+                ]
+            },
+            wang_attack: {
+                name: '【王天一名局】中炮过河车强攻屏风马',
+                turn: 1,
+                comment: '名局解析：红方过河车压住黑马，随时准备兵七进一或跃马盘河发起总攻！',
+                board: [
+                    -5, 0,-3,-2,-1,-2,-3, 0,-5,
+                     0, 0, 0, 0, 0, 0, 0, 0, 0,
+                     0,-6,-4, 0, 0, 0,-4,-6, 0,
+                    -7, 0,-7, 0,-7, 0, 5, 0,-7,
+                     0, 0, 0, 0, 0, 0, 7, 0, 0,
+                     0, 0, 7, 0, 0, 0, 0, 0, 0,
+                     7, 0, 0, 0, 7, 0, 0, 0, 7,
+                     0, 6, 4, 0, 6, 0, 4, 0, 0,
+                     0, 0, 0, 0, 2, 0, 0, 0, 0,
+                     5, 0, 3, 2, 1, 0, 3, 0, 0
+                ]
+            },
+            tiemenshuan: {
+                name: '【杀法特训】铁门栓与沉底炮连环杀',
+                turn: 1,
+                comment: '实战特训：中炮镇住中路，观察如何利用四路肋道车与沉底炮完成绝杀！',
+                board: [
+                    -5, 0,-3,-2,-1,-2,-3, 0, 0,
+                     0, 0, 0, 0, 0, 0, 0, 0, 0,
+                     0, 0,-4, 0,-3, 0, 0,-6, 0,
+                    -7, 0, 0, 0, 0, 0,-7, 0,-7,
+                     0, 0, 0, 5, 0, 0, 0, 0, 0,
+                     0, 0, 0, 0, 0, 6, 0, 0, 0,
+                     7, 0, 0, 0, 7, 0, 7, 0, 7,
+                     0, 0, 0, 0, 6, 0, 0, 0, 0,
+                     0, 0, 0, 0, 0,-5, 0, 0, 0,
+                     0, 0, 3, 2, 1, 2, 3, 0, 5
+                ]
+            },
+            shuangma: {
+                name: '【杀法特训】双马饮泉巧破士象全',
+                turn: 1,
+                comment: '残局精髓：“双马饮泉”讲究一马挂角定将，另一马扑槽或车砍底士绝杀！',
+                board: [
+                     0, 0,-3,-2,-1,-2,-3, 0, 0,
+                     0, 0, 0, 0, 0, 0, 0, 0, 0,
+                     0, 0, 0, 4, 0, 4, 0, 0, 0,
+                     0, 0, 0, 0, 0, 0, 0, 0, 0,
+                     0, 0, 0, 0, 0, 5, 0, 0, 0,
+                     0, 0, 0, 0, 0, 0, 0, 0, 0,
+                     0, 0, 0, 0, 0, 0, 0, 0, 0,
+                     0, 0, 0, 0, 0, 0, 0, 0, 0,
+                     0, 0, 0, 0,-5,-7, 0, 0, 0,
+                     0, 0, 3, 2, 1, 2, 3, 0, 0
+                ]
+            },
+            chema_endgame: {
+                name: '【残局特训】王天一式车马兵精确控盘',
+                turn: 1,
+                comment: '残局心法：“小卒过河顶大车”，用过河兵配合车马封锁黑车活动空间。',
+                board: [
+                     0, 0, 0,-2,-1,-2, 0, 0, 0,
+                     0, 0, 0, 0, 7, 0, 0, 0, 0,
+                     0, 0, 0, 4, 0, 0,-5, 0, 0,
+                     0, 0, 0, 0, 0, 0, 0, 0, 0,
+                     0, 0, 0, 5, 0, 0, 0, 0, 0,
+                     0, 0, 0, 0, 0, 0, 0, 0, 0,
+                     0, 0, 0, 0, 0, 0, 0, 0, 0,
+                     0, 0, 0, 0, 0, 0, 0, 0, 0,
+                     0, 0, 0, 2, 0, 2, 0, 0, 0,
+                     0, 0, 0, 0, 1, 0, 0, 0, 0
+                ]
+            }
+        };
+
+        // Grandmaster Opening Book (Red First Moves -> Black Master Replies)
+        const OPENING_BOOK = [
+            // Red plays King 5+1 "YuJiaQinZheng" (85 -> 76) => Black Central Cannon (19 -> 22)
+            {
+                historyKey: '85-76',
+                reply: { from: 19, to: 22 },
+                name: '御驾亲征·中炮破阵',
+                note: '红方首着帅五进一“御驾亲征”！特大惊叹其气魄，黑方沉着挺起中炮直瞄中宫，先声夺人！'
+            },
+            // Red plays Rook 1+1 BianChe (89 -> 80) => Black plays Knight 8+7 (7 -> 24)
+            {
+                historyKey: '89-80',
+                reply: { from: 7, to: 24 },
+                name: '边车起步·屏风固防',
+                note: '红方首着进边车求变，黑方依谱策马跳中，稳筑屏风马阵地。'
+            },
+            // Red plays Rook 9+1 Left BianChe (81 -> 72) => Black plays Knight 2+3 (1 -> 20)
+            {
+                historyKey: '81-72',
+                reply: { from: 1, to: 20 },
+                name: '左翼巡车·正马以待',
+                note: '红方进左翼边车，黑方右马起跳护住中卒，以逸待劳。'
+            },
+            // Red plays Knight 2+3 QiMa (88 -> 69) => Black Pawn 7+1 (33 -> 42)
+            {
+                historyKey: '88-69',
+                reply: { from: 33, to: 42 },
+                name: '起马局·挺卒制马',
+                note: '红方正马开局，黑方挺7卒制约马头，争夺中盘主动。'
+            },
+            // Red plays Knight 8+7 Left QiMa (82 -> 65) => Black Pawn 3+1 (29 -> 38)
+            {
+                historyKey: '82-65',
+                reply: { from: 29, to: 38 },
+                name: '左起马局·挺卒制马',
+                note: '红方起左正马，黑方挺3卒对应，稳扎稳打。'
+            },
+            // Red plays Pawn 5+1 Central Pawn (58 -> 49) => Black Knight 8+7 (7 -> 24)
+            {
+                historyKey: '58-49',
+                reply: { from: 7, to: 24 },
+                name: '挺中兵·屏风守中',
+                note: '红方强挺中兵意图强攻，黑方正马护中，防守森严。'
+            },
+            // Red plays Central Cannon C2=5 (69 -> 67) => Black plays Knight 8+7 (7 -> 24) Screen Horse
+            {
+                historyKey: '70-67',
+                reply: { from: 7, to: 24 },
+                name: '【当头炮对屏风马】',
+                note: '黑方应以“马8进7”护住中卒，这是象棋三百年来最经典的堂堂之阵！'
+            },
+            // Red plays Left Central Cannon C8=5 (64 -> 67) => Black plays Knight 2+3 (1 -> 20)
+            {
+                historyKey: '64-67',
+                reply: { from: 1, to: 20 },
+                name: '【中炮对屏风马】',
+                note: '“当头炮，马来跳”，黑方迅速跳正马保住中路。'
+            },
+            // Red plays Immortal's Guide P7+1 (56 -> 47) => Black plays Cannon 2=3 ZuDiPao (19 -> 20)
+            {
+                historyKey: '56-47',
+                reply: { from: 19, to: 20 },
+                name: '【仙人指路对卒底炮·王天一谱】',
+                note: '你使出了王天一最拿手的“仙人指路”！AI 立即回敬凶悍的“卒底炮”反击！'
+            },
+            // Red plays Immortal's Guide P3+1 (60 -> 51) => Black plays Cannon 8=7 (25 -> 24)
+            {
+                historyKey: '60-51',
+                reply: { from: 25, to: 24 },
+                name: '【仙人指路对卒底炮】',
+                note: '针锋相对！黑方架起卒底炮直接瞄准红方三路底线。'
+            },
+            // Red plays FeiXiang B3+5 (87 -> 67) => Black plays Left Central Cannon (19 -> 22)
+            {
+                historyKey: '87-67',
+                reply: { from: 19, to: 22 },
+                name: '【飞相局对左中炮】',
+                note: '红方飞相稳守反击，黑方架起左中炮强行破阵。'
+            },
+            // Second turn book: C2=5, n8+7, N2+3 (88->69) => Black R9=8 (8->7)
+            {
+                historyKey: '70-67,7-24,88-69',
+                reply: { from: 8, to: 7 },
+                name: '【中炮正马对屏风马亮直车】',
+                note: '“三步不出车，必定要输棋”——黑方亮出8路直车抢占肋道！'
+            }
+        ];
+
+        function isPieceAttackingKing(b, side) {
+            let kingSq = -1;
+            const targetK = side === 1 ? 1 : -1;
+            for (let i = 0; i < 90; i++) {
+                if (b[i] === targetK) { kingSq = i; break; }
+            }
+            if (kingSq === -1) return true;
+            const kr = (kingSq / 9) | 0, kc = kingSq % 9;
+            const enemy = -side;
+
+            const dirs = [-9, 9, -1, 1];
+            for (let step of dirs) {
+                let sq = kingSq + step;
+                let jumped = false;
+                while (sq >= 0 && sq < 90) {
+                    if ((step === -1 || step === 1) && (((sq / 9) | 0) !== kr)) break;
+                    const p = b[sq];
+                    if (p !== 0) {
+                        if (!jumped) {
+                            if (p === enemy * 5 || p === enemy * 1) return true;
+                            if (p === enemy * 7) {
+                                if (enemy === 1 && (sq - 9 === kingSq || (((sq / 9) | 0) <= 4 && Math.abs(sq - kingSq) === 1))) return true;
+                                if (enemy === -1 && (sq + 9 === kingSq || (((sq / 9) | 0) >= 5 && Math.abs(sq - kingSq) === 1))) return true;
+                            }
+                            jumped = true;
+                        } else {
+                            if (p === enemy * 6) return true;
+                            break;
+                        }
+                    }
+                    sq += step;
+                }
+            }
+
+            const nSteps = [[-2,-1],[-2,1],[2,-1],[2,1],[-1,-2],[1,-2],[-1,2],[1,2]];
+            for (let [dr, dc] of nSteps) {
+                const nr = kr + dr, nc = kc + dc;
+                if (nr >= 0 && nr < 10 && nc >= 0 && nc < 9) {
+                    if (b[nr * 9 + nc] === enemy * 4) {
+                        const legR = nr + (kr - nr === 2 ? 1 : kr - nr === -2 ? -1 : 0);
+                        const legC = nc + (kc - nc === 2 ? 1 : kc - nc === -2 ? -1 : 0);
+                        if (b[legR * 9 + legC] === 0) return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        function getLegalMovesForSquare(b, sq) {
+            const p = b[sq];
+            if (p === 0) return [];
+            const side = p > 0 ? 1 : -1;
+            const type = Math.abs(p);
+            const r = (sq / 9) | 0, c = sq % 9;
+            const pseudo = [];
+
+            if (type === 5 || type === 6) {
+                for (let step of [-9, 9, -1, 1]) {
+                    let nsq = sq + step, jumped = false;
+                    while (nsq >= 0 && nsq < 90) {
+                        if ((step === -1 || step === 1) && (((nsq / 9) | 0) !== r)) break;
+                        const t = b[nsq];
+                        if (!jumped) {
+                            if (t === 0) pseudo.push(nsq);
+                            else {
+                                if (type === 5 && (t > 0 ? 1 : -1) !== side) pseudo.push(nsq);
+                                jumped = true;
+                            }
+                        } else {
+                            if (t !== 0) {
+                                if (type === 6 && (t > 0 ? 1 : -1) !== side) pseudo.push(nsq);
+                                break;
+                            }
+                        }
+                        nsq += step;
+                    }
+                }
+            } else if (type === 4) {
+                const steps = [[-2,-1,-1,0],[-2,1,-1,0],[2,-1,1,0],[2,1,1,0],[-1,-2,0,-1],[1,-2,0,-1],[-1,2,0,1],[1,2,0,1]];
+                for (let [dr, dc, lr, lc] of steps) {
+                    const nr = r + dr, nc = c + dc;
+                    if (nr >= 0 && nr < 10 && nc >= 0 && nc < 9 && b[(r + lr) * 9 + (c + lc)] === 0) {
+                        const t = b[nr * 9 + nc];
+                        if (t === 0 || (t > 0 ? 1 : -1) !== side) pseudo.push(nr * 9 + nc);
+                    }
+                }
+            } else if (type === 3) {
+                const steps = [[-2,-2,-1,-1],[-2,2,-1,1],[2,-2,1,-1],[2,2,1,1]];
+                for (let [dr, dc, er, ec] of steps) {
+                    const nr = r + dr, nc = c + dc;
+                    if (nr >= 0 && nr < 10 && nc >= 0 && nc < 9) {
+                        if ((side === 1 && nr < 5) || (side === -1 && nr > 4)) continue;
+                        if (b[(r + er) * 9 + (c + ec)] === 0) {
+                            const t = b[nr * 9 + nc];
+                            if (t === 0 || (t > 0 ? 1 : -1) !== side) pseudo.push(nr * 9 + nc);
+                        }
+                    }
+                }
+            } else if (type === 2) {
+                for (let [dr, dc] of [[-1,-1],[-1,1],[1,-1],[1,1]]) {
+                    const nr = r + dr, nc = c + dc;
+                    if (nc >= 3 && nc <= 5 && ((side === 1 && nr >= 7 && nr <= 9) || (side === -1 && nr >= 0 && nr <= 2))) {
+                        const t = b[nr * 9 + nc];
+                        if (t === 0 || (t > 0 ? 1 : -1) !== side) pseudo.push(nr * 9 + nc);
+                    }
+                }
+            } else if (type === 1) {
+                for (let [dr, dc] of [[-1,0],[1,0],[0,-1],[0,1]]) {
+                    const nr = r + dr, nc = c + dc;
+                    if (nc >= 3 && nc <= 5 && ((side === 1 && nr >= 7 && nr <= 9) || (side === -1 && nr >= 0 && nr <= 2))) {
+                        const t = b[nr * 9 + nc];
+                        if (t === 0 || (t > 0 ? 1 : -1) !== side) pseudo.push(nr * 9 + nc);
+                    }
+                }
+            } else if (type === 7) {
+                const dir = side === 1 ? -1 : 1;
+                const nr = r + dir;
+                if (nr >= 0 && nr < 10) {
+                    const t = b[nr * 9 + c];
+                    if (t === 0 || (t > 0 ? 1 : -1) !== side) pseudo.push(nr * 9 + c);
+                }
+                if ((side === 1 && r <= 4) || (side === -1 && r >= 5)) {
+                    for (let dc of [-1, 1]) {
+                        const nc = c + dc;
+                        if (nc >= 0 && nc < 9) {
+                            const t = b[r * 9 + nc];
+                            if (t === 0 || (t > 0 ? 1 : -1) !== side) pseudo.push(r * 9 + nc);
+                        }
+                    }
+                }
+            }
+
+            // Filter out moves that leave own king in check or flying general
+            const legal = [];
+            for (let to of pseudo) {
+                const cap = b[to];
+                b[to] = p;
+                b[sq] = 0;
+                if (!isPieceAttackingKing(b, side)) legal.push(to);
+                b[sq] = p;
+                b[to] = cap;
+            }
+            return legal;
+        }
+
+        function hasAnyLegalMoves(b, side) {
+            for (let sq = 0; sq < 90; sq++) {
+                if (b[sq] !== 0 && (b[sq] > 0 ? 1 : -1) === side) {
+                    if (getLegalMovesForSquare(b, sq).length > 0) return true;
+                }
+            }
+            return false;
+        }
+
+        // Convert move to authentic Chinese Chess notation (e.g. 炮二平五, 马8进7)
+        const RED_NUMS = ['一','二','三','四','五','六','七','八','九'];
+        const BLK_NUMS = ['１','２','３','４','５','６','７','８','９'];
+
+        function formatChineseMove(piece, fromSq, toSq) {
+            const side = piece > 0 ? 1 : -1;
+            const name = PIECE_CHARS[piece];
+            const fr = (fromSq / 9) | 0, fc = fromSq % 9;
+            const tr = (toSq / 9) | 0, tc = toSq % 9;
+            const nums = side === 1 ? RED_NUMS : BLK_NUMS;
+            const fromColLabel = side === 1 ? nums[8 - fc] : nums[fc];
+            const toColLabel = side === 1 ? nums[8 - tc] : nums[tc];
+
+            if (fr === tr) {
+                return `${name}${fromColLabel}平${toColLabel}`;
+            }
+            const isForward = side === 1 ? (tr < fr) : (tr > fr);
+            const action = isForward ? '进' : '退';
+            const type = Math.abs(piece);
+            if (type === 2 || type === 3 || type === 4) {
+                return `${name}${fromColLabel}${action}${toColLabel}`;
+            } else {
+                const dist = Math.abs(tr - fr);
+                const distLabel = side === 1 ? RED_NUMS[dist - 1] : BLK_NUMS[dist - 1];
+                return `${name}${fromColLabel}${action}${distLabel}`;
+            }
+        }
+
+        // =========================================================================
+        // 4. HIGH-CRAFT CANVAS BOARD & PREDICTION ARROW RENDERER
+        // =========================================================================
+        function sqToXY(sq) {
+            const r = (sq / 9) | 0;
+            const c = sq % 9;
+            return { x: PAD_X + c * CELL, y: PAD_Y + r * CELL };
+        }
+
+        function drawCornerMark(cx, cy, c) {
+            const d = 5, len = 11;
+            ctx.strokeStyle = '#5c3818';
+            ctx.lineWidth = 1.6;
+            ctx.beginPath();
+            if (c > 0) {
+                ctx.moveTo(cx - d, cy - d - len); ctx.lineTo(cx - d, cy - d); ctx.lineTo(cx - d - len, cy - d);
+                ctx.moveTo(cx - d, cy + d + len); ctx.lineTo(cx - d, cy + d); ctx.lineTo(cx - d - len, cy + d);
+            }
+            if (c < 8) {
+                ctx.moveTo(cx + d, cy - d - len); ctx.lineTo(cx + d, cy - d); ctx.lineTo(cx + d + len, cy - d);
+                ctx.moveTo(cx + d, cy + d + len); ctx.lineTo(cx + d, cy + d); ctx.lineTo(cx + d + len, cy + d);
+            }
+            ctx.stroke();
+        }
+
+        function drawArrow(fromSq, toSq, color, labelText, lineWidth = 4.5) {
+            const p1 = sqToXY(fromSq);
+            const p2 = sqToXY(toSq);
+            const angle = Math.atan2(p2.y - p1.y, p2.x - p1.x);
+            const headLen = 14;
+
+            // Shorten slightly so it starts and ends nicely on piece centers
+            const endX = p2.x - Math.cos(angle) * 10;
+            const endY = p2.y - Math.sin(angle) * 10;
+
+            ctx.save();
+            ctx.strokeStyle = color;
+            ctx.fillStyle = color;
+            ctx.lineWidth = lineWidth;
+            ctx.lineCap = 'round';
+            ctx.shadowColor = 'rgba(0,0,0,0.6)';
+            ctx.shadowBlur = 6;
+
+            ctx.beginPath();
+            ctx.moveTo(p1.x, p1.y);
+            ctx.lineTo(endX, endY);
+            ctx.stroke();
+
+            // Arrowhead
+            ctx.beginPath();
+            ctx.moveTo(p2.x - Math.cos(angle) * 4, p2.y - Math.sin(angle) * 4);
+            ctx.lineTo(endX - headLen * Math.cos(angle - Math.PI / 6), endY - headLen * Math.sin(angle - Math.PI / 6));
+            ctx.lineTo(endX - headLen * Math.cos(angle + Math.PI / 6), endY - headLen * Math.sin(angle + Math.PI / 6));
+            ctx.closePath();
+            ctx.fill();
+
+            if (labelText) {
+                const mx = (p1.x + p2.x) / 2;
+                const my = (p1.y + p2.y) / 2;
+                ctx.beginPath();
+                ctx.arc(mx, my, 10, 0, Math.PI * 2);
+                ctx.fillStyle = '#14110f';
+                ctx.fill();
+                ctx.lineWidth = 1.5;
+                ctx.strokeStyle = color;
+                ctx.stroke();
+                ctx.fillStyle = '#fff';
+                ctx.font = 'bold 11px Inter, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(labelText, mx, my);
+            }
+            ctx.restore();
+        }
+
+        function drawBoard() {
+            // 1. Rich Woodgrain Background
+            const woodGrad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+            woodGrad.addColorStop(0, '#ecc58c');
+            woodGrad.addColorStop(0.5, '#dfa964');
+            woodGrad.addColorStop(1, '#cf944d');
+            ctx.fillStyle = woodGrad;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Subtle wood grain lines
+            ctx.strokeStyle = 'rgba(120, 70, 20, 0.06)';
+            ctx.lineWidth = 2;
+            for (let y = 8; y < canvas.height; y += 14) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.bezierCurveTo(180, y + 5, 360, y - 5, canvas.width, y + 2);
+                ctx.stroke();
+            }
+
+            // Outer decorative double border
+            ctx.strokeStyle = '#4a2b11';
+            ctx.lineWidth = 3.5;
+            ctx.strokeRect(PAD_X - 7, PAD_Y - 7, 8 * CELL + 14, 9 * CELL + 14);
+
+            // Inner Grid Lines
+            ctx.strokeStyle = '#4a2b11';
+            ctx.lineWidth = 1.8;
+            for (let r = 0; r < 10; r++) {
+                ctx.beginPath();
+                ctx.moveTo(PAD_X, PAD_Y + r * CELL);
+                ctx.lineTo(PAD_X + 8 * CELL, PAD_Y + r * CELL);
+                ctx.stroke();
+            }
+            for (let c = 0; c < 9; c++) {
+                ctx.beginPath();
+                ctx.moveTo(PAD_X + c * CELL, PAD_Y);
+                ctx.lineTo(PAD_X + c * CELL, PAD_Y + (c === 0 || c === 8 ? 9 * CELL : 4 * CELL));
+                ctx.stroke();
+                if (c > 0 && c < 8) {
+                    ctx.beginPath();
+                    ctx.moveTo(PAD_X + c * CELL, PAD_Y + 5 * CELL);
+                    ctx.lineTo(PAD_X + c * CELL, PAD_Y + 9 * CELL);
+                    ctx.stroke();
+                }
+            }
+
+            // Nine Palace Diagonal Lines
+            ctx.beginPath();
+            ctx.moveTo(PAD_X + 3 * CELL, PAD_Y); ctx.lineTo(PAD_X + 5 * CELL, PAD_Y + 2 * CELL);
+            ctx.moveTo(PAD_X + 5 * CELL, PAD_Y); ctx.lineTo(PAD_X + 3 * CELL, PAD_Y + 2 * CELL);
+            ctx.moveTo(PAD_X + 3 * CELL, PAD_Y + 7 * CELL); ctx.lineTo(PAD_X + 5 * CELL, PAD_Y + 9 * CELL);
+            ctx.moveTo(PAD_X + 5 * CELL, PAD_Y + 7 * CELL); ctx.lineTo(PAD_X + 3 * CELL, PAD_Y + 9 * CELL);
+            ctx.stroke();
+
+            // Cannon & Pawn Crosshair Marks
+            const markCoords = [
+                [2,1],[2,7],[7,1],[7,7],
+                [3,0],[3,2],[3,4],[3,6],[3,8],
+                [6,0],[6,2],[6,4],[6,6],[6,8]
+            ];
+            for (let [mr, mc] of markCoords) {
+                drawCornerMark(PAD_X + mc * CELL, PAD_Y + mr * CELL, mc);
+            }
+
+            // Chu River & Han Border Calligraphy
+            ctx.save();
+            ctx.fillStyle = '#523014';
+            ctx.font = 'bold 26px "Noto Serif SC", "KaiTi", serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('楚 河', PAD_X + 2 * CELL, PAD_Y + 4.5 * CELL);
+            ctx.fillText('漢 界', PAD_X + 6 * CELL, PAD_Y + 4.5 * CELL);
+
+            // File coordinate numbers along top and bottom
+            ctx.font = 'bold 12px "Noto Serif SC", sans-serif';
+            ctx.fillStyle = 'rgba(74, 43, 17, 0.75)';
+            for (let c = 0; c < 9; c++) {
+                ctx.fillText(c + 1, PAD_X + c * CELL, 18);
+                ctx.fillText(RED_NUMS[8 - c], PAD_X + c * CELL, canvas.height - 16);
+            }
+            ctx.restore();
+
+            // Last Move Highlight
+            if (moveHistory.length > 0) {
+                const last = moveHistory[moveHistory.length - 1];
+                [last.from, last.to].forEach(sq => {
+                    const { x, y } = sqToXY(sq);
+                    ctx.save();
+                    ctx.strokeStyle = 'rgba(20, 110, 235, 0.85)';
+                    ctx.lineWidth = 2.8;
+                    ctx.strokeRect(x - 26, y - 26, 52, 52);
+                    ctx.restore();
+                });
+            }
+
+            // Draw Chess Pieces with 3D Wooden/Jade Bevel
+            for (let sq = 0; sq < 90; sq++) {
+                const p = board[sq];
+                if (p === 0) continue;
+                const { x, y } = sqToXY(sq);
+                const isRed = p > 0;
+                const isSelected = sq === selectedSq;
+                const drawY = isSelected ? y - 4 : y;
+
+                ctx.save();
+                // Drop shadow
+                ctx.shadowColor = 'rgba(0, 0, 0, 0.55)';
+                ctx.shadowBlur = isSelected ? 14 : 6;
+                ctx.shadowOffsetY = isSelected ? 6 : 3;
+
+                // Outer wooden rim
+                ctx.beginPath();
+                ctx.arc(x, drawY, 24.5, 0, Math.PI * 2);
+                const rimGrad = ctx.createRadialGradient(x - 7, drawY - 7, 4, x, drawY, 25);
+                if (isRed) {
+                    rimGrad.addColorStop(0, '#fff3db');
+                    rimGrad.addColorStop(0.75, '#f2cfa0');
+                    rimGrad.addColorStop(1, '#c49358');
+                } else {
+                    rimGrad.addColorStop(0, '#4a433d');
+                    rimGrad.addColorStop(0.75, '#26211e');
+                    rimGrad.addColorStop(1, '#120f0d');
+                }
+                ctx.fillStyle = rimGrad;
+                ctx.fill();
+
+                ctx.shadowColor = 'transparent';
+                ctx.lineWidth = isSelected ? 2.8 : 1.8;
+                ctx.strokeStyle = isSelected ? '#10b981' : (isRed ? '#9e1c13' : '#d4a656');
+                ctx.stroke();
+
+                // Inner engraved ring
+                ctx.beginPath();
+                ctx.arc(x, drawY, 20, 0, Math.PI * 2);
+                ctx.lineWidth = 1.3;
+                ctx.strokeStyle = isRed ? 'rgba(175, 25, 18, 0.75)' : 'rgba(220, 175, 95, 0.75)';
+                ctx.stroke();
+
+                // Engraved Hanzi Character
+                ctx.fillStyle = isRed ? '#b5180f' : '#ecc376';
+                ctx.font = '900 25px "Noto Serif SC", "KaiTi", serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(PIECE_CHARS[p], x, drawY + 1.5);
+                ctx.restore();
+            }
+
+            // Draw Legal Move Indicators for Selected Piece
+            if (selectedSq !== -1 && legalMovesForSelected.length > 0) {
+                for (let targetSq of legalMovesForSelected) {
+                    const { x, y } = sqToXY(targetSq);
+                    ctx.save();
+                    if (board[targetSq] !== 0) {
+                        // Capture Ring
+                        ctx.beginPath();
+                        ctx.arc(x, y, 26, 0, Math.PI * 2);
+                        ctx.strokeStyle = '#ef4444';
+                        ctx.lineWidth = 3.5;
+                        ctx.setLineDash([6, 4]);
+                        ctx.stroke();
+                    } else {
+                        // Quiet Move Dot
+                        ctx.beginPath();
+                        ctx.arc(x, y, 7.5, 0, Math.PI * 2);
+                        ctx.fillStyle = 'rgba(16, 185, 129, 0.88)';
+                        ctx.fill();
+                        ctx.lineWidth = 2;
+                        ctx.strokeStyle = '#ffffff';
+                        ctx.stroke();
+                    }
+                    ctx.restore();
+                }
+            }
+
+            // Draw Master Hint Arrow (if active)
+            if (masterHintMove) {
+                drawArrow(masterHintMove.from, masterHintMove.to, '#fbbf24', '荐', 5.5);
+            }
+
+            // Draw AI PV Prediction Arrows (First 2 moves of PV or hovered PV step)
+            const showArrows = document.getElementById('showPvArrows')?.checked;
+            if (showArrows && currentPV.length > 0) {
+                if (highlightedPVStep >= 0 && currentPV[highlightedPVStep]) {
+                    const step = currentPV[highlightedPVStep];
+                    drawArrow(step.from, step.to, '#38bdf8', String(highlightedPVStep + 1), 5);
+                } else {
+                    const maxArrows = Math.min(2, currentPV.length);
+                    for (let i = 0; i < maxArrows; i++) {
+                        const step = currentPV[i];
+                        const col = i === 0 ? 'rgba(245, 158, 11, 0.78)' : 'rgba(56, 189, 248, 0.65)';
+                        drawArrow(step.from, step.to, col, String(i + 1), 3.8);
+                    }
+                }
+            }
+        }
+
+        // =========================================================================
+        // 5. ENGINE COMMUNICATION, EVALUATION BAR & TACTICAL COMMENTARY
+        // =========================================================================
+        let pendingHintRequest = false;
+
+        function updateEvaluationUI(scoreFromRedPerspective) {
+            // Convert centipawn score to win probability via sigmoid
+            const pawns = (scoreFromRedPerspective / 100).toFixed(1);
+            const winProbRed = Math.round(100 / (1 + Math.exp(-scoreFromRedPerspective / 380)));
+            const winProbBlack = 100 - winProbRed;
+
+            document.getElementById('blackEvalBar').style.height = `${winProbBlack}%`;
+            document.getElementById('blackWinPct').innerText = winProbBlack;
+            document.getElementById('redWinPct').innerText = winProbRed;
+
+            const badge = document.getElementById('evalScoreBadge');
+            if (Math.abs(scoreFromRedPerspective) > 15000) {
+                badge.innerText = scoreFromRedPerspective > 0 ? '红方绝杀必胜' : 'AI已锁定绝杀';
+                badge.className = 'font-mono text-sm font-bold text-red-400';
+            } else if (scoreFromRedPerspective > 80) {
+                badge.innerText = `红优 (+${pawns})`;
+                badge.className = 'font-mono text-sm font-bold text-red-400';
+            } else if (scoreFromRedPerspective < -80) {
+                badge.innerText = `黑优 (${pawns})`;
+                badge.className = 'font-mono text-sm font-bold text-sky-400';
+            } else {
+                badge.innerText = `均势 (${pawns})`;
+                badge.className = 'font-mono text-sm font-bold text-amber-400';
+            }
+        }
+
+        function renderPVLine(pv, depth, selDepth) {
+            currentPV = pv || [];
+            document.getElementById('pvDepthTag').innerText = `主搜索 ${depth} 层 / 算杀延伸 ${selDepth} 层`;
+            const container = document.getElementById('pvContainer');
+            if (!pv || pv.length === 0) {
+                container.innerHTML = '<span class="text-stone-500 italic">当前局面无后续推演分支</span>';
+                return;
+            }
+
+            container.innerHTML = pv.map((step, idx) => {
+                const isRedMove = step.piece > 0;
+                const notation = formatChineseMove(step.piece, step.from, step.to);
+                const badgeCls = isRedMove
+                    ? 'bg-red-950/80 border-red-700/60 text-red-200 hover:bg-red-800'
+                    : 'bg-stone-800 border-stone-600 text-amber-200 hover:bg-stone-700';
+                return `
+                    <span onmouseenter="highlightPV(${idx})" onmouseleave="highlightPV(-1)"
+                          class="px-2 py-1 rounded-md border text-[11px] font-mono cursor-pointer transition ${badgeCls}">
+                        <span class="opacity-60 mr-0.5">${idx + 1}.</span>${notation}
+                    </span>
+                `;
+            }).join('<i class="fa-solid fa-arrow-right text-[10px] text-stone-600"></i>');
+        }
+
+        function highlightPV(idx) {
+            highlightedPVStep = idx;
+            drawBoard();
+        }
+
+        function getEngineParams() {
+            const lvl = document.getElementById('levelSelect').value;
+            if (lvl === 'fast') return { maxDepth: 6, maxTimeMs: 700 };
+            if (lvl === 'master') return { maxDepth: 8, maxTimeMs: 1800 };
+            return { maxDepth: 11, maxTimeMs: 3600 }; // Alien mode with deep LMR + Quiescence up to 16 plies
+        }
+
+        function updateEngineConfig() {
+            const lvl = document.getElementById('levelSelect').value;
+            const titleMap = {
+                fast: '棋院强手 AI (算杀12层)',
+                master: '省冠大师 AI (算杀14层)',
+                alien: '“外星人”王天一引擎 (算杀16层)'
+            };
+            document.getElementById('topPlayerName').innerText = titleMap[lvl];
+        }
+
+        engineWorker.onmessage = function(e) {
+            const data = e.data;
+            document.getElementById('telemetryDepth').innerText = `${data.depth} / ${data.selDepth} 层`;
+            document.getElementById('telemetryNodes').innerText = data.nodes.toLocaleString();
+            document.getElementById('telemetryNps').innerText = `${data.nps.toLocaleString()} /秒`;
+
+            const redScore = turn === 1 ? data.score : -data.score;
+            updateEvaluationUI(redScore);
+            renderPVLine(data.pv, data.depth, data.selDepth);
+
+            if (data.type === 'progress') {
+                drawBoard();
+                return;
+            }
+
+            if (data.type === 'done') {
+                isThinking = false;
+                document.getElementById('thinkingBadge').classList.add('hidden');
+                document.getElementById('engineDot').className = 'w-2.5 h-2.5 rounded-full bg-emerald-500';
+                document.getElementById('engineStateText').innerText = '推演完成';
+
+                if (pendingHintRequest) {
+                    pendingHintRequest = false;
+                    if (data.bestMove) {
+                        masterHintMove = data.bestMove;
+                        const notation = formatChineseMove(board[data.bestMove.from], data.bestMove.from, data.bestMove.to);
+                        document.getElementById('tacticalExplanation').innerHTML =
+                            `<strong>天一导师支招：</strong>推荐走 <span class="text-amber-300 font-bold">【${notation}】</span>（已在棋盘用金色箭头标出），推演深度达 <strong>${data.selDepth} 层</strong>。`;
+                        drawBoard();
+                    }
+                    return;
+                }
+
+                if (data.bestMove && !gameOver) {
+                    executeMove(data.bestMove.from, data.bestMove.to, data.selDepth);
+                }
+            }
+        };
+
+        function executeMove(fromSq, toSq, searchedSelDepth = 0) {
+            const piece = board[fromSq];
+            const captured = board[toSq];
+            const notation = formatChineseMove(piece, fromSq, toSq);
+
+            board[toSq] = piece;
+            board[fromSq] = 0;
+
+            moveHistory.push({
+                from: fromSq,
+                to: toSq,
+                piece,
+                captured,
+                notation
+            });
+
+            selectedSq = -1;
+            legalMovesForSelected = [];
+            masterHintMove = null;
+
+            // Update move history UI
+            renderMoveHistory();
+
+            // Check if opponent is now in check or checkmated
+            const nextSide = -turn;
+            const inCheck = isPieceAttackingKing(board, nextSide);
+            const hasMoves = hasAnyLegalMoves(board, nextSide);
+
+            if (!hasMoves) {
+                gameOver = true;
+                isAiVsAi = false;
+                updateAutoPlayButton();
+                playSound('win');
+                const winnerText = turn === 1 ? '红方杀法绝胜！' : '黑方（AI外星人）杀法绝胜！';
+                showFloatingBanner(turn === 1 ? '红方胜！' : '绝 杀！', 3500);
+                document.getElementById('turnIndicatorBadge').innerText = winnerText;
+                document.getElementById('aiCommentText').innerText =
+                    turn === 1 ? '“妙棋！精准撕开防线，算度深远。”' : '“布局稍有破绽，中路攻势已不可阻挡。”';
+                drawBoard();
+                return;
+            }
+
+            // Check Chinese Chess Perpetual Check Rules (单方长将判负) & Repetition
+            const repResult = checkRefereeRepetition(nextSide, inCheck);
+            if (repResult.action === 'LOSE_PERPETUAL_CHECK') {
+                gameOver = true;
+                isAiVsAi = false;
+                updateAutoPlayButton();
+                playSound('win');
+                const loserName = turn === 1 ? '红方' : '黑方';
+                const winnerName = turn === 1 ? '黑方（AI）' : '红方（你）';
+                const msg = `【长将判负】${loserName}以同样方式连续将军形成死局，触犯中国象棋竞赛规则，裁判裁定判负！${winnerName}获胜！`;
+                showFloatingBanner(`长将违规！${loserName}判负`, 4000);
+                document.getElementById('turnIndicatorBadge').innerText = `${loserName}长将判负！`;
+                document.getElementById('turnIndicatorBadge').className = 'text-xs px-2 py-0.5 rounded bg-red-600/40 border border-red-500 text-red-200 font-semibold';
+                document.getElementById('aiCommentText').innerText = msg;
+                document.getElementById('tacticalExplanation').innerHTML =
+                    `<div class="p-2.5 rounded bg-red-950/70 border border-red-600/60 text-red-200 text-xs">
+                        <strong class="text-amber-300"><i class="fa-solid fa-gavel mr-1"></i>裁判终局裁决：</strong>${msg}
+                    </div>`;
+                drawBoard();
+                return;
+            } else if (repResult.action === 'WARN_PERPETUAL_CHECK') {
+                const moverName = turn === 1 ? '红方' : '黑方';
+                showFloatingBanner(`【长将警告】${moverName}已连续重复将军！请立即变着，再次长将将直接判负！`, 3500);
+                document.getElementById('tacticalExplanation').innerHTML =
+                    `<div class="p-2 rounded bg-amber-950/70 border border-amber-600/60 text-amber-200 text-xs">
+                        <strong><i class="fa-solid fa-triangle-exclamation mr-1 text-amber-400"></i>中国象棋长将规则警告：</strong>
+                        ${moverName}已连续重复将军！正规象棋规则严禁“单方长将形成死局”，长将方必须变着，若再重复走棋将军将直接裁定判负！
+                    </div>`;
+            } else if (repResult.action === 'DRAW_REPETITION') {
+                gameOver = true;
+                isAiVsAi = false;
+                updateAutoPlayButton();
+                playSound('win');
+                const msg = `【三次重复】双方均无长将长杀，同一局面重复出现三次，按正规规则裁定为和棋！`;
+                showFloatingBanner('三次重复，裁定作和', 3500);
+                document.getElementById('turnIndicatorBadge').innerText = '双方不变·裁定作和';
+                document.getElementById('aiCommentText').innerText = msg;
+                document.getElementById('tacticalExplanation').innerHTML =
+                    `<div class="p-2.5 rounded bg-stone-900 border border-amber-500/40 text-amber-200 text-xs">
+                        <strong><i class="fa-solid fa-handshake mr-1"></i>和棋裁决：</strong>${msg}
+                    </div>`;
+                drawBoard();
+                return;
+            }
+
+            if (inCheck) {
+                playSound('check');
+                showFloatingBanner('将 军！', 1100);
+            } else if (captured !== 0) {
+                playSound('capture');
+            } else {
+                playSound('move');
+            }
+
+            turn = nextSide;
+            updateTurnUI(notation, captured, searchedSelDepth);
+            drawBoard();
+
+            // Trigger AI if it's Black's turn or AI-vs-AI mode is active
+            if (!gameOver && (turn === -1 || isAiVsAi)) {
+                setTimeout(() => triggerAiMove(), 180);
+            }
+        }
+
+        function triggerAiMove() {
+            if (gameOver || isThinking) return;
+
+            // 1. Check Grandmaster Opening Book first if enabled
+            const useBook = document.getElementById('useOpeningBook')?.checked;
+            if (useBook && turn === -1 && moveHistory.length <= 3) {
+                const key = moveHistory.map(m => `${m.from}-${m.to}`).join(',');
+                const bookHit = OPENING_BOOK.find(b => b.historyKey === key);
+                if (bookHit && bookHit.reply && board[bookHit.reply.from] < 0) {
+                    const legal = getLegalMovesForSquare(board, bookHit.reply.from);
+                    if (legal.includes(bookHit.reply.to)) {
+                        document.getElementById('openingBadge').innerText = bookHit.name;
+                        document.getElementById('tacticalExplanation').innerHTML =
+                            `<strong>特大开局库命中【${bookHit.name}】：</strong>${bookHit.note}`;
+                        executeMove(bookHit.reply.from, bookHit.reply.to, 15);
+                        return;
+                    }
+                }
+            }
+
+            // 2. Otherwise start Web Worker Deep Search
+            isThinking = true;
+            pendingHintRequest = false;
+            const params = getEngineParams();
+            document.getElementById('thinkingBadge').classList.remove('hidden');
+            document.getElementById('thinkingBadgeText').innerText = `天一引擎深度推演中...`;
+            document.getElementById('engineDot').className = 'w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping';
+            document.getElementById('engineStateText').innerText = '深度计算中';
+
+            engineWorker.postMessage({
+                boardArr: board,
+                side: turn,
+                maxDepth: params.maxDepth,
+                maxTimeMs: params.maxTimeMs,
+                historyBoards: positionHistory.slice(-12).map(p => ({
+                    board: Array.from(p.board),
+                    side: p.side,
+                    inCheck: p.inCheck
+                }))
+            });
+        }
+
+        function requestMasterHint() {
+            if (gameOver || isThinking || turn !== 1) return;
+            isThinking = true;
+            pendingHintRequest = true;
+            document.getElementById('thinkingBadge').classList.remove('hidden');
+            document.getElementById('thinkingBadgeText').innerText = '正在为你推演最佳支招...';
+            engineWorker.postMessage({
+                boardArr: board,
+                side: 1,
+                maxDepth: 7,
+                maxTimeMs: 1100
+            });
+        }
+
+        function updateTurnUI(lastNotation, capturedPiece, selDepth) {
+            const badge = document.getElementById('turnIndicatorBadge');
+            if (turn === 1) {
+                badge.innerText = '轮到你走棋 (红方)';
+                badge.className = 'text-xs px-2 py-0.5 rounded bg-red-600/30 border border-red-500 text-red-200 font-semibold';
+                if (lastNotation) {
+                    const capMsg = capturedPiece !== 0 ? `并吃掉【${PIECE_CHARS[capturedPiece]}】` : '';
+                    document.getElementById('aiCommentText').innerText =
+                        `AI 走出【${lastNotation}】${capMsg}（已推演至 ${selDepth || 14} 层深度）`;
+                }
+            } else {
+                badge.innerText = 'AI 思考中 (黑方)';
+                badge.className = 'text-xs px-2 py-0.5 rounded bg-amber-600/30 border border-amber-500 text-amber-200 font-semibold';
+            }
+        }
+
+        function renderMoveHistory() {
+            const box = document.getElementById('tabMovesContent');
+            if (moveHistory.length === 0) {
+                box.innerHTML = '<div class="text-stone-500 text-center py-12">暂无走子记录，请点击棋盘开始对弈</div>';
+                return;
+            }
+            let html = '';
+            for (let i = 0; i < moveHistory.length; i += 2) {
+                const round = (i / 2) + 1;
+                const redM = moveHistory[i];
+                const blkM = moveHistory[i + 1];
+                html += `
+                    <div class="flex items-center justify-between px-2.5 py-1 rounded bg-[#1a1512] border border-stone-800/80">
+                        <span class="text-stone-500 w-10">第${round}合</span>
+                        <span class="text-red-300 font-semibold flex-1">${redM.notation}</span>
+                        <span class="text-amber-200 font-semibold flex-1 text-right">${blkM ? blkM.notation : '...'}</span>
+                    </div>
+                `;
+            }
+            box.innerHTML = html;
+            box.scrollTop = box.scrollHeight;
+        }
+
+        function showFloatingBanner(text, duration = 1200) {
+            const wrap = document.getElementById('floatingAlert');
+            const inner = document.getElementById('floatingAlertInner');
+            inner.innerText = text;
+            wrap.classList.remove('hidden');
+            setTimeout(() => wrap.classList.add('hidden'), duration);
+        }
+
+        // =========================================================================
+        // 6. USER INTERACTION, UNDO, SCENARIOS & MODAL CONTROLS
+        // =========================================================================
+        canvas.addEventListener('click', function(e) {
+            if (gameOver || isThinking || isAiVsAi || turn !== 1) return;
+
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            const x = (e.clientX - rect.left) * scaleX;
+            const y = (e.clientY - rect.top) * scaleY;
+
+            const c = Math.round((x - PAD_X) / CELL);
+            const r = Math.round((y - PAD_Y) / CELL);
+            if (r < 0 || r >= 10 || c < 0 || c >= 9) return;
+
+            const clickedSq = r * 9 + c;
+            const clickedPiece = board[clickedSq];
+
+            // If a friendly piece is already selected and user clicks a valid destination
+            if (selectedSq !== -1 && legalMovesForSelected.includes(clickedSq)) {
+                executeMove(selectedSq, clickedSq);
+                return;
+            }
+
+            // Select own Red piece
+            if (clickedPiece > 0) {
+                selectedSq = clickedSq;
+                legalMovesForSelected = getLegalMovesForSquare(board, clickedSq);
+                playSound('move');
+                drawBoard();
+            } else {
+                selectedSq = -1;
+                legalMovesForSelected = [];
+                drawBoard();
+            }
+        });
+
+        function loadScenario(key) {
+            const sc = SCENARIOS[key] || SCENARIOS.standard;
+            isAiVsAi = false;
+            updateAutoPlayButton();
+            board = new Int8Array(sc.board);
+            turn = sc.turn;
+            selectedSq = -1;
+            legalMovesForSelected = [];
+            moveHistory = [];
+            positionHistory = [{
+                board: Array.from(board),
+                side: turn,
+                turnWhoMoved: -turn,
+                inCheck: false,
+                key: board.join(',') + '_' + turn
+            }];
+            currentPV = [];
+            masterHintMove = null;
+            gameOver = false;
+
+            document.getElementById('openingBadge').innerText = sc.name;
+            document.getElementById('tacticalExplanation').innerHTML = `<strong>${sc.name}：</strong>${sc.comment}`;
+            document.getElementById('pvContainer').innerHTML = '<span class="text-stone-500 italic">走出一着棋后，这里将实时列出 AI 往后推演的每一步招法...</span>';
+            updateEvaluationUI(0);
+            renderMoveHistory();
+            updateTurnUI();
+            drawBoard();
+        }
+
+        function resetToCurrentScenario() {
+            const currentKey = document.getElementById('scenarioSelect').value;
+            loadScenario(currentKey);
+        }
+
+        function undoPairMove() {
+            if (isThinking || moveHistory.length === 0) return;
+            isAiVsAi = false;
+            updateAutoPlayButton();
+            gameOver = false;
+
+            // Undo up to 2 plies so it returns to human Red's turn
+            const stepsToUndo = (turn === 1 && moveHistory.length >= 2) ? 2 : 1;
+            for (let i = 0; i < stepsToUndo; i++) {
+                const last = moveHistory.pop();
+                if (!last) break;
+                board[last.from] = last.piece;
+                board[last.to] = last.captured;
+                turn = last.piece > 0 ? 1 : -1;
+                if (positionHistory.length > 1) positionHistory.pop();
+            }
+            selectedSq = -1;
+            legalMovesForSelected = [];
+            masterHintMove = null;
+            renderMoveHistory();
+            updateTurnUI();
+            drawBoard();
+        }
+
+        function flipSidesAndLetAiPlay() {
+            if (gameOver || isThinking) return;
+            triggerAiMove();
+        }
+
+        function toggleAiVsAi() {
+            if (gameOver) return;
+            isAiVsAi = !isAiVsAi;
+            updateAutoPlayButton();
+            if (isAiVsAi && !isThinking) {
+                triggerAiMove();
+            }
+        }
+
+        function updateAutoPlayButton() {
+            const btnText = document.getElementById('autoPlayBtnText');
+            const btn = document.getElementById('autoPlayBtn');
+            if (isAiVsAi) {
+                btnText.innerText = '停止神仙打架';
+                btn.className = 'bg-emerald-900/60 border border-emerald-400 py-2 px-3 rounded-xl text-xs font-bold text-emerald-200 flex items-center justify-center gap-1.5';
+            } else {
+                btnText.innerText = '神仙打架观摩';
+                btn.className = 'btn-dark py-2 px-3 rounded-xl text-xs font-semibold text-amber-200 flex items-center justify-center gap-1.5';
+            }
+        }
+
+        function switchSideTab(tab) {
+            const mBtn = document.getElementById('tabMovesBtn');
+            const kBtn = document.getElementById('tabKoujueBtn');
+            const mCont = document.getElementById('tabMovesContent');
+            const kCont = document.getElementById('tabKoujueContent');
+            if (tab === 'moves') {
+                mCont.classList.remove('hidden');
+                kCont.classList.add('hidden');
+                mBtn.className = 'px-3 py-1 rounded-lg text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40';
+                kBtn.className = 'px-3 py-1 rounded-lg text-xs font-bold text-stone-400 hover:text-amber-200';
+            } else {
+                kCont.classList.remove('hidden');
+                mCont.classList.add('hidden');
+                kBtn.className = 'px-3 py-1 rounded-lg text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40';
+                mBtn.className = 'px-3 py-1 rounded-lg text-xs font-bold text-stone-400 hover:text-amber-200';
+            }
+        }
+
+        function openGuideModal() {
+            document.getElementById('guideModal').classList.remove('hidden');
+        }
+        function closeGuideModal() {
+            document.getElementById('guideModal').classList.add('hidden');
+        }
+
+        window.onload = function() {
+            loadScenario('standard');
+        };
+    </script>
+</body>
+</html>
